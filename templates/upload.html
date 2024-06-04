@@ -330,7 +330,7 @@
                 const countrySelect = document.getElementById('country');
                 const deploymentSelect = document.getElementById('deployment');
 
-                const response = await fetch('/ami-data-upload/get-deployments/');
+                const response = await fetch('/get-deployments/');
                 const data = await response.json();
 
                 const countries = [...new Map(data.map(item => [item.country_code, item.country])).entries()];
@@ -379,7 +379,7 @@
                 }
 
                 xhr = new XMLHttpRequest();
-                xhr.open('POST', '/ami-data-upload/upload/', true);
+                xhr.open('POST', '/upload/', true);
 
                 xhr.upload.onprogress = (event) => {
                     document.getElementById('loader').style.display = 'block';
