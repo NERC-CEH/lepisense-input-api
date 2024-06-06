@@ -12,13 +12,41 @@ from tempfile import NamedTemporaryFile
 from pydantic import BaseModel
 from datetime import datetime
 
+tags_metadata = [
+    {
+        "name": "Deployments",
+        "description": "Operations with deployments."
+    },
+    {
+        "name": "Data",
+        "description": "Manage data, uploading and downloading."
+    },
+    {
+        "name": "Other",
+        "description": ""
+    }
+]
 
-app = FastAPI()
+app = FastAPI(
+    title="AMI Data Management API.",
+    version="1.0.1",
+    contact={
+        "name": "AMI system team at UKCEH.",
+        "url": "https://www.ceh.ac.uk/solutions/equipment/automated-monitoring-insects-trap",
+        "email": "ami-system@ceh.ac.uk",
+    },
+    license_info={
+        "name": "Apache 2.0",
+        "identifier": "MIT",
+    },
+    openapi_tags=tags_metadata
+)
 
 # Set up CORS middleware
 origins = [
     "http://localhost",
     "http://localhost:8080",
+    "http://127.0.0.1",
     "http://127.0.0.1:8080",
     "https://connect-apps.ceh.ac.uk/ami-data-upload/"
 ]
@@ -31,7 +59,6 @@ app.add_middleware(
 )
 # Mount the static directory to serve static files
 app.mount("/static", StaticFiles(directory="static"), name="static")
-
 
 # Load AWS credentials and S3 bucket name from config file
 with open('credentials.json') as config_file:
@@ -62,6 +89,7 @@ def load_deployments_info():
 
 
 deployments_info = load_deployments_info()
+valid_countries_names = {d['country'] for d in deployments_info if d['status'] == 'active'}
 valid_countries_location_names = {f"{d['country']} - {d['location_name']}" for d in deployments_info
                                   if d['status'] == 'active'}
 valid_data_types = {"motion_images", "snapshot_images", "audible_recordings", "ultrasound_recordings"}
@@ -71,28 +99,29 @@ class UploadResponse(BaseModel):
     uploaded_files: List[str]
 
 
-@app.get("/", response_class=HTMLResponse)
+@app.get("/", response_class=HTMLResponse, tags=["Data"])
 async def main():
     with open("templates/upload.html") as f:
         html_content = f.read()
     return HTMLResponse(content=html_content)
 
 
-@app.get("/get-deployments/")
+@app.get("/get-deployments/", tags=["Deployments"])
 async def get_deployments():
     return JSONResponse(content=deployments_info)
 
 
-@app.get("/list-data/")
+@app.get("/list-data/", tags=["Other"])
 async def list_data(
-        country_location_name: str = Query("", enum=sorted(list(valid_countries_location_names)), description="Country and location names."),
+        country_location_name: str = Query("", enum=sorted(list(valid_countries_location_names)),
+                                           description="Country and location names."),
         data_type: str = Query("", enum=list(valid_data_types), description="")
 ):
     country, location_name = country_location_name.split(" - ")
     country_code = [d['country_code'] for d in deployments_info if d['country'] == country][0]
     s3_bucket_name = country_code.lower()
     deployment_id = [d['deployment_id'] for d in deployments_info if d['country'] == country
-                    and d['location_name'] == location_name][0]
+                     and d['location_name'] == location_name][0]
     prefix = f"{deployment_id}/{data_type}/"
     try:
         response = s3_client.list_objects_v2(Bucket=s3_bucket_name, Prefix=prefix)
@@ -108,12 +137,11 @@ async def list_data(
         return JSONResponse(status_code=500, content={"message": str(e)})
 
 
-@app.get("/get-logs/")
+@app.get("/get-logs/", tags=["Other"])
 async def get_logs(
-        country_location_name: str = Query("", enum=sorted(list(valid_countries_location_names)), description="Country and location names."),
+        country_name: str = Query("", enum=sorted(list(valid_countries_names)), description="Country names."),
 ):
-    country, location_name = country_location_name.split(" - ")
-    country_code = [d['country_code'] for d in deployments_info if d['country'] == country][0]
+    country_code = [d['country_code'] for d in deployments_info if d['country'] == country_name][0]
     s3_bucket_name = country_code.lower()
     try:
         file = s3_client.get_object(Bucket=s3_bucket_name, Key="logs/upload_summary.json")
@@ -125,7 +153,7 @@ async def get_logs(
         raise HTTPException(status_code=401, detail="Credentials not available")
 
 
-@app.post("/upload/")
+@app.post("/upload/", tags=["Data"])
 async def upload_file(
         request: Request,
         name: str = Form(...),
@@ -135,6 +163,7 @@ async def upload_file(
         files: List[UploadFile] = File(...)
 ):
     s3_bucket_name = country.lower()
+    s3_bucket_name = "test-upload"
     uploaded_files = []
     key = deployment + "/" + data_type + "/"
     for file in files:
@@ -202,7 +231,7 @@ async def upload_file(
     return JSONResponse(content=response.dict())
 
 
-@app.post("/create-bucket/")
+@app.post("/create-bucket/", tags=["Other"])
 async def create_bucket(bucket_name: str = Body(..., embed=True)):
     try:
         s3_client.create_bucket(Bucket=bucket_name, CreateBucketConfiguration={'LocationConstraint': 'eu-west-1'})
@@ -221,4 +250,5 @@ async def create_bucket(bucket_name: str = Body(..., embed=True)):
 
 if __name__ == "__main__":
     import uvicorn
+
     uvicorn.run(app, host="0.0.0.0", port=8080)
