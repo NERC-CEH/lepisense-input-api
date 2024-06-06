@@ -9,8 +9,9 @@ import json
 import os
 import csv
 from tempfile import NamedTemporaryFile
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from datetime import datetime
+
 
 tags_metadata = [
     {
@@ -19,19 +20,19 @@ tags_metadata = [
     },
     {
         "name": "Data",
-        "description": "Manage data, uploading and downloading."
+        "description": "Operations for data management in the server, uploading and downloading."
     },
     {
         "name": "Other",
-        "description": ""
+        "description": "Other operations."
     }
 ]
 
 app = FastAPI(
-    title="AMI Data Management API.",
+    title="AMI Data Management API",
     version="1.0.1",
     contact={
-        "name": "AMI system team at UKCEH.",
+        "name": "AMI system team at UKCEH",
         "url": "https://www.ceh.ac.uk/solutions/equipment/automated-monitoring-insects-trap",
         "email": "ami-system@ceh.ac.uk",
     },
@@ -54,11 +55,12 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=origins,
     allow_credentials=True,
-    allow_methods=["GET", "POST"],
+    allow_methods=["*"],
     allow_headers=["*"],
 )
 # Mount the static directory to serve static files
 app.mount("/static", StaticFiles(directory="static"), name="static")
+
 
 # Load AWS credentials and S3 bucket name from config file
 with open('credentials.json') as config_file:
@@ -99,6 +101,22 @@ class UploadResponse(BaseModel):
     uploaded_files: List[str]
 
 
+class Deployment(BaseModel):
+    country: str
+    country_code: str
+    location_name: str
+    lat: str
+    lon: str
+    location_id: str
+    camera_id: str
+    system_id: str
+    hardware_id: str
+    deployment_id: str
+    data_type: str = Field(default="motion_images,snapshot_images,audible_recordings,ultrasound_recordings")
+    s3_key: str = Field(default="country_code/deployment_id/data_type")
+    status: str = Field(default="inactive")
+
+
 @app.get("/", response_class=HTMLResponse, tags=["Data"])
 async def main():
     with open("templates/upload.html") as f:
@@ -111,17 +129,70 @@ async def get_deployments():
     return JSONResponse(content=deployments_info)
 
 
+@app.post("/create-deployment/", tags=["Deployments"])
+async def create_deployment(deployment: Deployment):
+    try:
+        # Append the new deployment to the CSV file
+        with open('deployments_info.csv', 'a', newline='') as csvfile:
+            fieldnames = ['country', 'country_code', 'location_name', "lat", "lon", "location_id", 'camera_id',
+                          "system_id", 'hardware_id', 'deployment_id', 'data_type', "s3_key", 'status']
+            writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
+            writer.writerow(deployment.dict())
+
+        # Reload deployments info
+        global deployments_info
+        deployments_info = load_deployments_info()
+
+        return JSONResponse(status_code=201, content={"message": "Deployment created successfully"})
+    except Exception as e:
+        return JSONResponse(status_code=500, content={"message": str(e)})
+
+
+@app.put("/update-deployment/", tags=["Deployments"])
+async def update_deployment(deployment: Deployment):
+    try:
+        # Load existing deployments
+        deployments = load_deployments_info()
+
+        # Find the deployment to update
+        updated = False
+        for i, existing_deployment in enumerate(deployments):
+            if existing_deployment['deployment_id'] == deployment.deployment_id:
+                deployments[i] = deployment.dict()
+                updated = True
+                break
+
+        if not updated:
+            return JSONResponse(status_code=404, content={"message": "Deployment not found"})
+
+        # Write the updated deployments back to the CSV file
+        with open('deployments_info.csv', 'w', newline='') as csvfile:
+            fieldnames = ['country', 'country_code', 'location_name', "lat", "lon", "location_id", 'camera_id',
+                          "system_id", 'hardware_id', 'deployment_id', 'data_type', "s3_key", 'status']
+            writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
+            writer.writeheader()
+            for dep in deployments:
+                writer.writerow(dep)
+
+        # Reload deployments info
+        global deployments_info
+        deployments_info = load_deployments_info()
+
+        return JSONResponse(status_code=200, content={"message": "Deployment updated successfully"})
+    except Exception as e:
+        return JSONResponse(status_code=500, content={"message": str(e)})
+
+
 @app.get("/list-data/", tags=["Other"])
 async def list_data(
-        country_location_name: str = Query("", enum=sorted(list(valid_countries_location_names)),
-                                           description="Country and location names."),
+        country_location_name: str = Query("", enum=sorted(list(valid_countries_location_names)), description="Country and location names."),
         data_type: str = Query("", enum=list(valid_data_types), description="")
 ):
     country, location_name = country_location_name.split(" - ")
     country_code = [d['country_code'] for d in deployments_info if d['country'] == country][0]
     s3_bucket_name = country_code.lower()
     deployment_id = [d['deployment_id'] for d in deployments_info if d['country'] == country
-                     and d['location_name'] == location_name][0]
+                    and d['location_name'] == location_name][0]
     prefix = f"{deployment_id}/{data_type}/"
     try:
         response = s3_client.list_objects_v2(Bucket=s3_bucket_name, Prefix=prefix)
@@ -250,5 +321,4 @@ async def create_bucket(bucket_name: str = Body(..., embed=True)):
 
 if __name__ == "__main__":
     import uvicorn
-
     uvicorn.run(app, host="0.0.0.0", port=8080)
