@@ -55,6 +55,28 @@ Start the application using Uvicorn:
 uvicorn main:app --port 8080 --reload
 ```
 
+## Using the Upload Page
+
+### Accessing the Upload Page
+Once the application is running, open your web browser and navigate to http://localhost:8080/. You will see a form that allows you to upload files.
+![upload_form_screenshot.png](./images/upload_form_screenshot.png)
+
+### Uploading Files
+1. **Fill in the form::** 
+   - **Your Full Name:** Enter your full name.
+   - **Country:** Select the country from the dropdown menu.
+   - **Deployment:** Select the deployment from the dropdown menu.
+   - **Data type:** Select the type of data (e.g., motion images, snapshot images, audible recordings, ultrasound recordings).
+   - **Select Files:** Choose the files you want to upload (images and audio files are allowed).
+   - **Review Data:** Check the box to acknowledge that you have reviewed the data.
+  
+  
+2. **Upload the files::**
+   - Click the ```Upload``` button to start the upload process.
+   - A spinner will appear, and an alert will notify you not to close or refresh the page while uploading.
+   - Once the upload is complete, a success message will be displayed.
+  
+  
 ## Endpoints
 
 ### Documentation
