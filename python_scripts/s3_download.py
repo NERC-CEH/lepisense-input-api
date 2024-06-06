@@ -24,11 +24,6 @@ s3 = boto3.resource('s3',
                     aws_secret_access_key=AWS_SECRET_ACCESS_KEY,
                     endpoint_url=AWS_URL_ENDPOINT)
 
-# Select bucket
-BUCKET_NAME = s3.Bucket('test-upload')
-
-LOCAL_DOWNLOAD_PATH = r"./test_download"
-
 
 def download_object(key):
     path, filename = os.path.split(key)
@@ -39,11 +34,11 @@ def download_object(key):
     return "Success"
 
 
-def download_parallel_multithreading():
+def download_parallel_multithreading(prefix):
     # Dispatch work tasks
     with ThreadPoolExecutor(max_workers=10) as executor:
         future_to_key = {
-            executor.submit(download_object, object.key): object.key for object in BUCKET_NAME.objects.all()
+            executor.submit(download_object, object.key): object.key for object in BUCKET_NAME.objects.filter(Prefix=prefix)
         }
 
         for future in futures.as_completed(future_to_key):
@@ -60,7 +55,12 @@ if __name__ == "__main__":
     now = datetime.now()
     start_time = now.strftime("%H:%M:%S")
 
-    for key, result in download_parallel_multithreading():
+    # Select bucket
+    BUCKET_NAME = s3.Bucket('test-upload')
+    PREFIX = ""
+    LOCAL_DOWNLOAD_PATH = r"./test_download"
+
+    for key, result in download_parallel_multithreading(PREFIX):
         print(f"{key} result: {result}")
 
     now = datetime.now()
