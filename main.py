@@ -15,12 +15,12 @@ from datetime import datetime
 
 tags_metadata = [
     {
-        "name": "Deployments",
-        "description": "Operations with deployments."
-    },
-    {
         "name": "Data",
         "description": "Operations for data management in the server, uploading and downloading."
+    },
+    {
+        "name": "Deployments",
+        "description": "Operations with deployments."
     },
     {
         "name": "Other",
