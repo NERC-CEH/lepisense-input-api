@@ -198,13 +198,22 @@ async def list_data(
     country_code = [d['country_code'] for d in deployments_info if d['country'] == country][0]
     s3_bucket_name = country_code.lower()
     deployment_id = [d['deployment_id'] for d in deployments_info if d['country'] == country
-                    and d['location_name'] == location_name][0]
+                     and d['location_name'] == location_name][0]
     prefix = f"{deployment_id}/{data_type}/"
+
+    # Create a paginator helper for list_objects_v2
+    paginator = s3_client.get_paginator('list_objects_v2')
+    operation_parameters = {'Bucket': s3_bucket_name, 'Prefix': prefix}
+
     try:
-        response = s3_client.list_objects_v2(Bucket=s3_bucket_name, Prefix=prefix)
-        if 'Contents' not in response:
-            return JSONResponse(status_code=404, content={"message": "No data found"})
-        files = [content['Key'] for content in response['Contents']]
+        files = []
+        page_iterator = paginator.paginate(**operation_parameters)
+        # Work through the response pages, add to the running total
+        for page in page_iterator:
+            if 'Contents' in page:
+                for obj in page['Contents']:
+                    files.append(obj['Key'])
+        print(len(files))
         return JSONResponse(status_code=200, content={"files": files})
     except NoCredentialsError:
         return JSONResponse(status_code=400, content={"message": "Credentials not available"})
