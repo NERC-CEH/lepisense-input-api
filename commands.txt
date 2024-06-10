@@ -2,7 +2,7 @@
 uvicorn main:app --port 8080 --reload
 
 2- Create requirements file:
-pip freeze | Out-File -Encoding ASCII requirements.txt
+pip freeze > requirements.txt
 
 3- Deploy app in the RStudio Connect server at CEH:
 rsconnect deploy fastapi --server https://connect-apps.ceh.ac.uk/ --api-key POSIT-API-KEY . --entrypoint main:app --verbose --app-id GUID

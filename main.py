@@ -4,6 +4,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 import boto3
 from botocore.exceptions import NoCredentialsError, PartialCredentialsError, ClientError
+import boto3.s3.transfer as s3transfer
 from typing import List
 import json
 import os
@@ -80,6 +81,11 @@ s3_client = boto3.client(
     endpoint_url=AWS_URL_ENDPOINT
 )
 
+workers = 20
+transfer_config = s3transfer.TransferConfig(
+    use_threads=True,
+    max_concurrency=workers,
+)
 
 def load_deployments_info():
     deployments = []
@@ -224,6 +230,22 @@ async def get_logs(
         raise HTTPException(status_code=401, detail="Credentials not available")
 
 
+def fast_upload(s3_bucket_name, files, key, uploaded_files):
+    s3t = s3transfer.create_transfer_manager(s3_client, transfer_config)
+    for file in files:
+        try:
+            dst = key + file.filename
+            s3t.upload(
+                file.file, s3_bucket_name, dst,
+            )
+            uploaded_files.append(file.filename)
+        except Exception as e:
+            return JSONResponse(status_code=400, content={"message": f"Error uploading {key}/{file.filename}: {e}"})
+
+    s3t.shutdown()  # wait for all the upload tasks to finish
+    return uploaded_files
+
+
 @app.post("/upload/", tags=["Data"])
 async def upload_file(
         request: Request,
@@ -234,22 +256,17 @@ async def upload_file(
         files: List[UploadFile] = File(...)
 ):
     s3_bucket_name = country.lower()
-    s3_bucket_name = "test-upload"
+    # s3_bucket_name = "test-upload"
     uploaded_files = []
     key = deployment + "/" + data_type + "/"
-    for file in files:
-        try:
-            s3_client.upload_fileobj(
-                file.file,
-                s3_bucket_name,
-                key + file.filename)
-            uploaded_files.append(file.filename)
-        except NoCredentialsError:
-            return JSONResponse(status_code=400, content={"message": "Credentials not available"})
-        except PartialCredentialsError:
-            return JSONResponse(status_code=400, content={"message": "Incomplete credentials"})
-        except Exception as e:
-            return JSONResponse(status_code=500, content={"message": str(e)})
+    try:
+        uploaded_files = fast_upload(s3_bucket_name, files, key, uploaded_files)
+    except NoCredentialsError:
+        return JSONResponse(status_code=400, content={"message": "Credentials not available"})
+    except PartialCredentialsError:
+        return JSONResponse(status_code=400, content={"message": "Incomplete credentials"})
+    except Exception as e:
+        return JSONResponse(status_code=500, content={"message": str(e)})
 
     # Create a temporary log file
     log_key = f"logs/upload_summary.log"
