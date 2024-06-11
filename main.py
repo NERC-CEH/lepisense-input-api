@@ -9,10 +9,12 @@ from datetime import datetime
 import os
 import csv
 import json
+from itertools import islice
 import boto3
 import boto3.s3.transfer as s3transfer
 from botocore.exceptions import NoCredentialsError, PartialCredentialsError, ClientError
 from tempfile import NamedTemporaryFile
+from concurrent.futures import ThreadPoolExecutor
 
 
 tags_metadata = [
@@ -298,13 +300,46 @@ async def get_logs(country_name: str = Query("", enum=sorted(list(valid_countrie
                                              description="Country names.")):
     country_code = [d['country_code'] for d in deployments_info if d['country'] == country_name][0]
     s3_bucket_name = country_code.lower()
-    s3_bucket_name = "test-upload"
     try:
         log_key = "logs/upload_summary.log"
         log_file = download_logs_str(s3_bucket_name, log_key)
         return Response(content=log_file, media_type="application/json5+text; charset=utf-8")
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"{e}")
+
+
+def upload_file_s3(s3t, s3_bucket_name, key, file, uploaded_files):
+    try:
+        dst = f"{key}/{file.filename}"
+        s3t.upload(
+            file.file, s3_bucket_name, dst,
+        )
+        uploaded_files.append(file.filename)
+    except Exception as e:
+        return JSONResponse(status_code=500, content={"message": f"Error uploading {key}/{file.filename}: {e}"})
+
+
+def upload_chunk(s3t, chunk, s3_bucket_name, key, uploaded_files):
+    for file in chunk:
+        upload_file_s3(s3t, s3_bucket_name, key, file, uploaded_files)
+
+
+def chunks(iterable, size):
+    iterator = iter(iterable)
+    for first in iterator:
+        yield list(islice(iterator, size))
+
+
+def upload_files(files, s3_bucket_name, key, uploaded_files, chunk_size=100, max_workers=10):
+    s3t = s3transfer.create_transfer_manager(s3_client, config=transfer_config)
+    with ThreadPoolExecutor(max_workers=max_workers) as executor:
+        futures = [
+            executor.submit(upload_chunk, s3t, chunk, s3_bucket_name, key, uploaded_files)
+            for chunk in chunks(files, chunk_size)
+        ]
+
+    s3t.shutdown()  # wait for all the upload tasks to finish
+    return uploaded_files
 
 
 @app.post("/upload/", tags=["Data"])
@@ -319,25 +354,11 @@ async def upload_file(
     now = datetime.now()
     start_time = now.strftime("%H:%M:%S")
 
-    # s3_bucket_name = country.lower()
-    s3_bucket_name = "test-upload"
+    s3_bucket_name = country.lower()
     key = deployment + "/" + data_type + "/"
     uploaded_files = []
 
-    s3t = s3transfer.create_transfer_manager(s3_client, transfer_config)
-    for file in files:
-        try:
-            dst = key + file.filename
-            s3t.upload(file.file, s3_bucket_name, dst)
-            uploaded_files.append(file.filename)
-        except NoCredentialsError:
-            return JSONResponse(status_code=400, content={"message": "Credentials not available"})
-        except PartialCredentialsError:
-            return JSONResponse(status_code=400, content={"message": "Incomplete credentials"})
-        except Exception as e:
-            return JSONResponse(status_code=500, content={"message": f"Error uploading: {e}"})
-
-    s3t.shutdown()  # wait for all the upload tasks to finish
+    uploaded_files = upload_files(files, s3_bucket_name, key, uploaded_files)
 
     now = datetime.now()
     end_time = now.strftime("%H:%M:%S")
