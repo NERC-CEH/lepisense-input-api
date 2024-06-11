@@ -292,8 +292,8 @@
 
                     <div class="mb-3">
                         <label for="files">Select Files:</label>
-<!--                        <input type="file" id="files" name="files" multiple required>-->
                         <input type="file" class="form-control" id="files" name="files" multiple accept="image/*,audio/*" required>
+                        <small id="fileHelp" class="form-text text-muted">You can select up to 1000 files.</small>
                     </div>
 
                     <div class="form-check mb-3">
@@ -364,8 +364,17 @@
 
             let xhr;
 
+            document.getElementById('files').addEventListener('change', function() {
+                const maxFiles = 1000;
+                if (this.files.length > maxFiles) {
+                    alert(`You can only select up to ${maxFiles} files.`);
+                    this.value = ''; // Clear the selected files
+                }
+            });
+
             document.getElementById('uploadForm').addEventListener('submit', async (e) => {
                 e.preventDefault();
+                document.getElementById('response').style.display = 'none';
 
                 const formData = new FormData();
                 formData.append('name', document.getElementById('name').value);
@@ -389,6 +398,7 @@
 
                 xhr.onload = () => {
                     if (xhr.status === 200) {
+                        document.getElementById('response').innerText = 'Upload Success!';
                         document.getElementById('response').style.display = 'block';
                         document.getElementById('uploadForm').reset();  // Clear the form
                         document.getElementById('uploadButton').disabled = true;  // Disable the upload button again
