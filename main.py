@@ -1,17 +1,11 @@
-from fastapi import FastAPI, Form, File, UploadFile, HTTPException, Request, Body, Query
-from fastapi.responses import HTMLResponse, JSONResponse, Response
+from fastapi import FastAPI, Form, File, UploadFile, Request, Body, Query
+from fastapi.responses import HTMLResponse, Response
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
-import boto3
-from botocore.exceptions import NoCredentialsError, PartialCredentialsError, ClientError
-import boto3.s3.transfer as s3transfer
 from typing import List
-import json
-import os
-import csv
-from tempfile import NamedTemporaryFile
+from concurrent.futures import ThreadPoolExecutor, wait
 from pydantic import BaseModel, Field
-from datetime import datetime
+from functions import *
 
 
 tags_metadata = [
@@ -61,40 +55,6 @@ app.add_middleware(
 )
 # Mount the static directory to serve static files
 app.mount("/static", StaticFiles(directory="static"), name="static")
-
-
-# Load AWS credentials and S3 bucket name from config file
-with open('credentials.json') as config_file:
-    aws_credentials = json.load(config_file)
-
-AWS_ACCESS_KEY_ID = aws_credentials['AWS_ACCESS_KEY_ID']
-AWS_SECRET_ACCESS_KEY = aws_credentials['AWS_SECRET_ACCESS_KEY']
-AWS_REGION = aws_credentials['AWS_REGION']
-AWS_URL_ENDPOINT = aws_credentials['AWS_URL_ENDPOINT']
-
-# Initialize S3 client
-s3_client = boto3.client(
-    's3',
-    aws_access_key_id=AWS_ACCESS_KEY_ID,
-    aws_secret_access_key=AWS_SECRET_ACCESS_KEY,
-    region_name=AWS_REGION,
-    endpoint_url=AWS_URL_ENDPOINT
-)
-
-workers = 20
-transfer_config = s3transfer.TransferConfig(
-    use_threads=True,
-    max_concurrency=workers,
-)
-
-def load_deployments_info():
-    deployments = []
-    with open('deployments_info.csv', newline='') as csvfile:
-        reader = csv.DictReader(csvfile)
-        for row in reader:
-            deployments.append(row)
-    return deployments
-
 
 deployments_info = load_deployments_info()
 valid_countries_names = {d['country'] for d in deployments_info if d['status'] == 'active'}
@@ -201,58 +161,25 @@ async def list_data(
                      and d['location_name'] == location_name][0]
     prefix = f"{deployment_id}/{data_type}/"
 
-    # Create a paginator helper for list_objects_v2
-    paginator = s3_client.get_paginator('list_objects_v2')
-    operation_parameters = {'Bucket': s3_bucket_name, 'Prefix': prefix}
-
     try:
-        files = []
-        page_iterator = paginator.paginate(**operation_parameters)
-        # Work through the response pages, add to the running total
-        for page in page_iterator:
-            if 'Contents' in page:
-                for obj in page['Contents']:
-                    files.append(obj['Key'])
-        print(len(files))
+        files = s3_list_objects(s3_bucket_name, prefix)
         return JSONResponse(status_code=200, content={"files": files})
-    except NoCredentialsError:
-        return JSONResponse(status_code=400, content={"message": "Credentials not available"})
-    except PartialCredentialsError:
-        return JSONResponse(status_code=400, content={"message": "Incomplete credentials"})
     except Exception as e:
         return JSONResponse(status_code=500, content={"message": str(e)})
 
 
 @app.get("/get-logs/", tags=["Other"])
-async def get_logs(
-        country_name: str = Query("", enum=sorted(list(valid_countries_names)), description="Country names."),
-):
+async def get_logs(country_name: str = Query("", enum=sorted(list(valid_countries_names)),
+                                             description="Country names.")):
     country_code = [d['country_code'] for d in deployments_info if d['country'] == country_name][0]
     s3_bucket_name = country_code.lower()
+
     try:
-        file = s3_client.get_object(Bucket=s3_bucket_name, Key="logs/upload_summary.json")
-        json_data = file['Body'].read().decode('utf-8')
+        log_key = "logs/upload_summary.log"
+        json_data = download_logs(s3_bucket_name, log_key)
         return Response(content=json_data, media_type="application/json")
-    except s3_client.exceptions.NoSuchKey:
-        raise HTTPException(status_code=404, detail="JSON not found")
-    except NoCredentialsError:
-        raise HTTPException(status_code=401, detail="Credentials not available")
-
-
-def fast_upload(s3_bucket_name, files, key, uploaded_files):
-    s3t = s3transfer.create_transfer_manager(s3_client, transfer_config)
-    for file in files:
-        try:
-            dst = key + file.filename
-            s3t.upload(
-                file.file, s3_bucket_name, dst,
-            )
-            uploaded_files.append(file.filename)
-        except Exception as e:
-            return JSONResponse(status_code=400, content={"message": f"Error uploading {key}/{file.filename}: {e}"})
-
-    s3t.shutdown()  # wait for all the upload tasks to finish
-    return uploaded_files
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"{e}")
 
 
 @app.post("/upload/", tags=["Data"])
@@ -265,11 +192,18 @@ async def upload_file(
         files: List[UploadFile] = File(...)
 ):
     s3_bucket_name = country.lower()
-    # s3_bucket_name = "test-upload"
-    uploaded_files = []
     key = deployment + "/" + data_type + "/"
+    uploaded_files = []
+
     try:
-        uploaded_files = fast_upload(s3_bucket_name, files, key, uploaded_files)
+        # Divide the large volume data into smaller chunks
+        batch_size = 100
+        chunks = divide_data_into_chunks(files, batch_size)
+        # Process each chunk in parallel using a thread pool executor
+        executor = ThreadPoolExecutor(max_workers=20)
+        futures = [executor.submit(fast_upload, s3_bucket_name, chunk, key, uploaded_files) for chunk in chunks]
+        # Wait for all tasks to complete
+        wait(futures)
     except NoCredentialsError:
         return JSONResponse(status_code=400, content={"message": "Credentials not available"})
     except PartialCredentialsError:
@@ -277,52 +211,8 @@ async def upload_file(
     except Exception as e:
         return JSONResponse(status_code=500, content={"message": str(e)})
 
-    # Create a temporary log file
-    log_key = f"logs/upload_summary.log"
-    tmp_log_name = None
-
-    # Check if the log file exists in the bucket
-    try:
-        s3_client.head_object(Bucket=s3_bucket_name, Key=log_key)
-        # If the log file exists, download it
-        with NamedTemporaryFile(delete=False, mode='wb') as tmp_log:
-            s3_client.download_fileobj(s3_bucket_name, log_key, tmp_log)
-            tmp_log_name = tmp_log.name
-    except ClientError as e:
-        if e.response['Error']['Code'] == '404':
-            # The log file does not exist, create a new one
-            with NamedTemporaryFile(delete=False, mode='w') as tmp_log:
-                tmp_log_name = tmp_log.name
-        else:
-            raise HTTPException(status_code=500, detail="Could not access S3 bucket")
-
-    # Append new log entries to the temporary log file following CLF format
     host = request.client.host
-    ident = "-"
-    authuser = "-"
-    with open(tmp_log_name, 'a') as tmp_log:
-        for file_name in uploaded_files:
-            date_str = datetime.now().strftime("%d/%b/%Y:%H:%M:%S %z")
-            request_line = f'POST /upload/ HTTP/1.1'
-            status = 200
-            bytes_sent = '-'  # You can replace this with the actual byte size of the response if needed
-            log_entry = (f'{host} {ident} {authuser} [{date_str}] "{request_line}" {status} {bytes_sent} Name="{name}" '
-                         f'Country="{country}" Deployment="{deployment}" DataType="{data_type}" FileName="{file_name}"\n')
-            tmp_log.write(log_entry)
-
-    # Upload the log file to S3
-    try:
-        with open(tmp_log_name, 'rb') as f:
-            s3_client.upload_fileobj(f, s3_bucket_name, log_key)
-    except NoCredentialsError:
-        raise HTTPException(status_code=403, detail="Credentials not available")
-    except PartialCredentialsError:
-        raise HTTPException(status_code=400, detail="Incomplete credentials")
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-    finally:
-        # Clean up the temporary file
-        os.remove(tmp_log_name)
+    write_logs(uploaded_files, s3_bucket_name, host, name, deployment, data_type)
 
     response = UploadResponse(uploaded_files=uploaded_files)
     return JSONResponse(content=response.dict())
@@ -331,16 +221,7 @@ async def upload_file(
 @app.post("/create-bucket/", tags=["Other"])
 async def create_bucket(bucket_name: str = Body(..., embed=True)):
     try:
-        s3_client.create_bucket(Bucket=bucket_name, CreateBucketConfiguration={'LocationConstraint': 'eu-west-1'})
-        return JSONResponse(status_code=200, content={"message": f"Bucket '{bucket_name}' created successfully"})
-    except s3_client.exceptions.BucketAlreadyExists:
-        return JSONResponse(status_code=400, content={"message": "Bucket already exists"})
-    except s3_client.exceptions.BucketAlreadyOwnedByYou:
-        return JSONResponse(status_code=400, content={"message": "Bucket already owned by you"})
-    except NoCredentialsError:
-        return JSONResponse(status_code=400, content={"message": "Credentials not available"})
-    except PartialCredentialsError:
-        return JSONResponse(status_code=400, content={"message": "Incomplete credentials"})
+        s3_create_bucket(bucket_name)
     except Exception as e:
         return JSONResponse(status_code=500, content={"message": str(e)})
 
