@@ -82,7 +82,9 @@ s3_client = boto3.client('s3',
                          aws_secret_access_key=AWS_SECRET_ACCESS_KEY,
                          region_name=AWS_REGION,
                          endpoint_url=AWS_URL_ENDPOINT,
-                         config=botocore.client.Config(max_pool_connections=50)
+                         config=botocore.client.Config(retries={"max_attempts": 10},
+                                                       connect_timeout=20,
+                                                       max_pool_connections=50)
                          )
 
 transfer_config = s3transfer.TransferConfig(
