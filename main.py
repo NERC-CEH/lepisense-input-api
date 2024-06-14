@@ -12,6 +12,7 @@ import json
 from itertools import islice
 import boto3
 import boto3.s3.transfer as s3transfer
+import botocore
 from botocore.exceptions import NoCredentialsError, PartialCredentialsError, ClientError
 from tempfile import NamedTemporaryFile
 from concurrent.futures import ThreadPoolExecutor
@@ -76,13 +77,13 @@ AWS_REGION = aws_credentials['AWS_REGION']
 AWS_URL_ENDPOINT = aws_credentials['AWS_URL_ENDPOINT']
 
 # Initialize S3 client
-s3_client = boto3.client(
-    's3',
-    aws_access_key_id=AWS_ACCESS_KEY_ID,
-    aws_secret_access_key=AWS_SECRET_ACCESS_KEY,
-    region_name=AWS_REGION,
-    endpoint_url=AWS_URL_ENDPOINT
-)
+s3_client = boto3.client('s3',
+                         aws_access_key_id=AWS_ACCESS_KEY_ID,
+                         aws_secret_access_key=AWS_SECRET_ACCESS_KEY,
+                         region_name=AWS_REGION,
+                         endpoint_url=AWS_URL_ENDPOINT,
+                         config=botocore.client.Config(max_pool_connections=50)
+                         )
 
 transfer_config = s3transfer.TransferConfig(
     # multipart_threshold=1024 * 25,  # 25MB threshold for multipart uploads
