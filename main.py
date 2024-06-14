@@ -88,9 +88,9 @@ s3_client = boto3.client('s3',
                          )
 
 transfer_config = s3transfer.TransferConfig(
-    # multipart_threshold=1024 * 25,  # 25MB threshold for multipart uploads
+    multipart_threshold=1024 * 25,  # 25MB threshold for multipart uploads
     max_concurrency=20,             # Increase the number of concurrent threads
-    # multipart_chunksize=1024 * 25,  # 25MB chunk size
+    multipart_chunksize=1024 * 25,  # 25MB chunk size
     use_threads=True
 )
 
