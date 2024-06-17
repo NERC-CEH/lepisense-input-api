@@ -319,9 +319,9 @@
                 </div>
 
                 <div id="response" class="mt-3">
-                    <div class="alert alert-success" role="alert">
-                        Upload Success!
-                    </div>
+<!--                    <div class="alert alert-success" role="alert">-->
+<!--                        Upload Success!-->
+<!--                    </div>-->
                 </div>
             </div>
         </div>
@@ -400,13 +400,14 @@
                 };
 
                 xhr.onload = () => {
+                    const response = JSON.parse(xhr.responseText);
                     if (xhr.status === 200) {
-                        document.getElementById('response').innerText = 'Upload Success!';
+                        document.getElementById('response').innerHTML = `<div class="alert alert-success" role="alert">${response.message}</div>`;
                         document.getElementById('response').style.display = 'block';
                         document.getElementById('uploadForm').reset();  // Clear the form
                         document.getElementById('uploadButton').disabled = true;  // Disable the upload button again
                     } else {
-                        document.getElementById('response').innerHTML = '<div class="alert alert-danger" role="alert">Upload failed.</div>';
+                        document.getElementById('response').innerHTML = `<div class="alert alert-danger" role="alert">${response.message}</div>`;
                         document.getElementById('response').style.display = 'block';
                     }
                     document.getElementById('loader').style.display = 'none';
@@ -415,7 +416,7 @@
                 };
 
                 xhr.onerror = () => {
-                    document.getElementById('response').innerText = 'Upload failed.';
+                    document.getElementById('response').innerHTML = '<div class="alert alert-danger" role="alert">Upload failed.</div>';
                     document.getElementById('loader').style.display = 'none';
                     document.getElementById('alertText').style.display = 'none';
                     document.getElementById('cancelButton').style.display = 'none';
@@ -423,7 +424,7 @@
                 };
 
                 xhr.onabort = () => {
-                    document.getElementById('response').innerText = 'Upload canceled.';
+                    document.getElementById('response').innerText = '<div class="alert alert-danger" role="alert">Upload canceled.</div>';
                     document.getElementById('loader').style.display = 'none';
                     document.getElementById('alertText').style.display = 'none';
                     document.getElementById('cancelButton').style.display = 'none';
