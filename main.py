@@ -304,6 +304,7 @@ async def upload_zip(
 
         # Upload each file in the zip to S3
         for file_info in zipfile_obj.infolist():
+            # TODO: Check data type
             # Skip directories
             if file_info.is_dir():
                 continue

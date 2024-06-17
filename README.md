@@ -150,6 +150,17 @@ Once the application is running, open your web browser and navigate to http://lo
   - `deployment`: `string`
   - `data_type`: `string`
   - `files`: `file[]`
+
+- **Upload Data zip format:** Endpoint for pushing images and audio files to the server in a zip file. Upload one zip file, that will get unzip and each file will be pushed.  
+  ```http
+  POST /upload-zip/
+  ```
+  Form Data:
+  - `name`: `string`
+  - `country`: `string`
+  - `deployment`: `string`
+  - `data_type`: `string`
+  - `files`: `file`
   
   
 ### Other Operations
