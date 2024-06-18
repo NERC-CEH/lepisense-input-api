@@ -232,20 +232,21 @@ async def create_bucket(bucket_name: str = Query("", description="Bucket are nam
                                                                  "Alpha-3 code, check this link: "
                                                                  "https://www.iban.com/country-codes. "
                                                                  "E.g. The United Kingdom would be gbr")):
+    print(bucket_name)
     async with session.client('s3',
                               aws_access_key_id=AWS_ACCESS_KEY_ID,
                               aws_secret_access_key=AWS_SECRET_ACCESS_KEY,
                               region_name=AWS_REGION,
                               endpoint_url=AWS_URL_ENDPOINT) as s3:
         try:
-            s3.create_bucket(Bucket=bucket_name)
+            await s3.create_bucket(Bucket=bucket_name, CreateBucketConfiguration={'LocationConstraint': AWS_REGION})
             return JSONResponse(status_code=200, content={"message": f"Bucket '{bucket_name}' created successfully"})
         except s3.exceptions.BucketAlreadyExists:
-            return JSONResponse(status_code=400, content={"message": "Bucket already exists"})
+            raise HTTPException(status_code=409, detail=f"Bucket {bucket_name} already exists.")
         except s3.exceptions.BucketAlreadyOwnedByYou:
-            return JSONResponse(status_code=400, content={"message": "Bucket already owned by you"})
+            raise HTTPException(status_code=409, detail=f"Bucket {bucket_name} is already owned by you.")
         except Exception as e:
-            return JSONResponse(status_code=500, content={"message": str(e)})
+            raise HTTPException(status_code=500, detail=f"Error creating bucket: {str(e)}")
 
 
 @app.post("/upload/", tags=["Data"])
