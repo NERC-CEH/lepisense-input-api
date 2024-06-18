@@ -140,7 +140,7 @@ Once the application is running, open your web browser and navigate to http://lo
   
   
 ### Data management
-- **Upload Data:** Endpoint for pushing images and audio files to the server. 
+- **Upload Data:** Endpoint for pushing images and audio files to the server. The files need to be compressed in zip folder not bigger than 5Gbs. 
   ```http
   POST /upload/
   ```
@@ -149,18 +149,7 @@ Once the application is running, open your web browser and navigate to http://lo
   - `country`: `string`
   - `deployment`: `string`
   - `data_type`: `string`
-  - `files`: `file[]`
-
-- **Upload Data zip format:** Endpoint for pushing images and audio files to the server in a zip file. Upload one zip file, that will get unzip and each file will be pushed.  
-  ```http
-  POST /upload-zip/
-  ```
-  Form Data:
-  - `name`: `string`
-  - `country`: `string`
-  - `deployment`: `string`
-  - `data_type`: `string`
-  - `files`: `file`
+  - `file`: `.zip file`
   
   
 ### Other Operations
@@ -175,7 +164,7 @@ Once the application is running, open your web browser and navigate to http://lo
   
 - **Get Logs:** Endpoint for downloading the logs from a bucket in the S3 server. 
 Everytime a user push some new data to the server, the log file is update with some information: 
-date and time, user name, country, deployment, data type and filename. 
+date and time, username, country, deployment, data type and filename. 
   ```http
   GET /get-logs/
   ```
