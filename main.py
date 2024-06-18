@@ -108,12 +108,21 @@ class Deployment(BaseModel):
     system_id: str
     hardware_id: str
     deployment_id: str
-    data_type: str = Field(default="motion_images,snapshot_images,audible_recordings,ultrasound_recordings")
-    s3_key: str = Field(default="country_code/deployment_id/data_type")
+    status: str
+
+
+class NewDeployment(BaseModel):
+    country: str
+    country_code: str
+    location_name: str
+    lat: str
+    lon: str
+    camera_id: str
+    hardware_id: str
     status: str = Field(default="inactive")
 
 
-@app.get("/", response_class=HTMLResponse)
+@app.get("/", response_class=HTMLResponse, include_in_schema=False)
 async def main():
     with open("templates/upload.html") as f:
         html_content = f.read()
@@ -125,18 +134,50 @@ async def get_deployments():
     return JSONResponse(content=deployments_info)
 
 
+def increment_id(data, current_id):
+    id_list = []
+    for obj in data:
+        if obj[current_id] != '':
+            id_list.append(obj[current_id])
+    # Extract the str part of each ID
+    id_type = id_list[0][:3]
+    # Extract the numeric part of each ID and convert it to an integer
+    numeric_ids = [int(id[3:]) for id in id_list]
+    # Find the maximum numeric ID
+    max_numeric_id = max(numeric_ids)+1
+    # Format back to the original ID format with leading zeros
+    highest_id = f"{id_type}{max_numeric_id:06}"
+    return highest_id
+
+
 @app.post("/create-deployment/", tags=["Deployments"])
-async def create_deployment(deployment: Deployment):
+async def create_deployment(new_deployment: NewDeployment):
     try:
+        global deployments_info
         # Append the new deployment to the CSV file
         with open('deployments_info.csv', 'a', newline='') as csvfile:
+            # TODO: check is location already exists
+            location_id = increment_id(deployments_info, 'location_id')
+            # TODO: check is camera id already exists
+            system_id = increment_id(deployments_info, 'system_id')
+            deployment_id = increment_id(deployments_info, 'deployment_id')
+            deployment = Deployment(country=new_deployment.country,
+                                    country_code=new_deployment.country_code,
+                                    location_name=new_deployment.location_name,
+                                    lat=new_deployment.lat,
+                                    lon=new_deployment.lon,
+                                    location_id=location_id,
+                                    camera_id=new_deployment.camera_id,
+                                    system_id=system_id,
+                                    hardware_id=new_deployment.hardware_id,
+                                    deployment_id=deployment_id,
+                                    status=new_deployment.status)
             fieldnames = ['country', 'country_code', 'location_name', "lat", "lon", "location_id", 'camera_id',
-                          "system_id", 'hardware_id', 'deployment_id', 'data_type', "s3_key", 'status']
+                          "system_id", 'hardware_id', 'deployment_id', 'status']
             writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
             writer.writerow(deployment.dict())
 
         # Reload deployments info
-        global deployments_info
         deployments_info = load_deployments_info()
 
         return JSONResponse(status_code=201, content={"message": "Deployment created successfully"})
@@ -147,33 +188,27 @@ async def create_deployment(deployment: Deployment):
 @app.put("/update-deployment/", tags=["Deployments"])
 async def update_deployment(deployment: Deployment):
     try:
-        # Load existing deployments
-        deployments = load_deployments_info()
+        # Reload deployments info
+        global deployments_info
 
         # Find the deployment to update
-        updated = False
-        for i, existing_deployment in enumerate(deployments):
+        for i, existing_deployment in enumerate(deployments_info):
             if existing_deployment['deployment_id'] == deployment.deployment_id:
-                deployments[i] = deployment.dict()
-                updated = True
+                deployments_info[i] = deployment.dict()
                 break
-
-        if not updated:
-            return JSONResponse(status_code=404, content={"message": "Deployment not found"})
+            if i == len(deployments_info)-1:
+                return JSONResponse(status_code=404, content={"message": "Deployment not found"})
 
         # Write the updated deployments back to the CSV file
         with open('deployments_info.csv', 'w', newline='') as csvfile:
             fieldnames = ['country', 'country_code', 'location_name', "lat", "lon", "location_id", 'camera_id',
-                          "system_id", 'hardware_id', 'deployment_id', 'data_type', "s3_key", 'status']
+                          "system_id", 'hardware_id', 'deployment_id', 'status']
             writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
             writer.writeheader()
-            for dep in deployments:
+            for dep in deployments_info:
                 writer.writerow(dep)
 
-        # Reload deployments info
-        global deployments_info
         deployments_info = load_deployments_info()
-
         return JSONResponse(status_code=200, content={"message": "Deployment updated successfully"})
     except Exception as e:
         return JSONResponse(status_code=500, content={"message": str(e)})
