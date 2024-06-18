@@ -67,7 +67,7 @@ Once the application is running, open your web browser and navigate to http://lo
    - **Country:** Select the country from the dropdown menu.
    - **Deployment:** Select the deployment from the dropdown menu.
    - **Data type:** Select the type of data (e.g., motion images, snapshot images, audible recordings, ultrasound recordings).
-   - **Select Files:** Choose the files you want to upload (images and audio files are allowed).
+   - **Select Zip File:** Choose the zip file you want to upload, that contains images or audio files depending on the type of data that you are uploading.
    - **Review Data:** Check the box to acknowledge that you have reviewed the data.
   
   
@@ -84,6 +84,19 @@ Once the application is running, open your web browser and navigate to http://lo
 - **ReDoc:** [http://localhost:8080/redoc](http://localhost:8080/redoc)
 
 ![api_screenshot.png](./images/api_screenshot.png)
+
+### Data management
+- **Upload Data:** Endpoint for pushing images and audio files to the server. The files need to be compressed in zip folder not bigger than 5Gbs. 
+  ```http
+  POST /upload/
+  ```
+  Form Data:
+  - `name`: `string`
+  - `country`: `string`
+  - `deployment`: `string`
+  - `data_type`: `string`
+  - `file`: `.zip file`
+  
 
 ### Deployments
 - **Get Deployments:** Endpoint to retrieve all deployment information.
@@ -103,13 +116,8 @@ Once the application is running, open your web browser and navigate to http://lo
     "location_name": "Location Name",
     "lat": "Latitude",
     "lon": "Longitude",
-    "location_id": "Location ID",
     "camera_id": "Camera ID",
-    "system_id": "System ID",
     "hardware_id": "Hardware ID",
-    "deployment_id": "Deployment ID",
-    "data_type": "motion_images,snapshot_images,audible_recordings,ultrasound_recordings",
-    "s3_key": "country_code/deployment_id/file_type",
     "status": "inactive"
   }
   ```
@@ -132,24 +140,9 @@ Once the application is running, open your web browser and navigate to http://lo
     "system_id": "System ID",
     "hardware_id": "Hardware ID",
     "deployment_id": "Deployment ID",
-    "data_type": "motion_images,snapshot_images,audible_recordings,ultrasound_recordings",
-    "s3_key": "country_code/deployment_id/file_type",
     "status": "inactive"
   }
   ```
-  
-  
-### Data management
-- **Upload Data:** Endpoint for pushing images and audio files to the server. The files need to be compressed in zip folder not bigger than 5Gbs. 
-  ```http
-  POST /upload/
-  ```
-  Form Data:
-  - `name`: `string`
-  - `country`: `string`
-  - `deployment`: `string`
-  - `data_type`: `string`
-  - `file`: `.zip file`
   
   
 ### Other Operations
