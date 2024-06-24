@@ -1,20 +1,33 @@
-from fastapi import FastAPI, Form, File, UploadFile, Request, Body, Query, HTTPException
-from fastapi.responses import HTMLResponse, Response, JSONResponse
-from fastapi.staticfiles import StaticFiles
-from fastapi.middleware.cors import CORSMiddleware
-
 from typing import List
-from pydantic import BaseModel, Field
-from datetime import datetime
 from time import perf_counter
 import csv
 import json
 import asyncio
-from io import BytesIO
-import zipfile
+import os
+import logging
+
+from fastapi import FastAPI, Form, File, UploadFile, Request, Query
+from fastapi.responses import HTMLResponse, JSONResponse, PlainTextResponse
+from fastapi.staticfiles import StaticFiles
+from fastapi.middleware.cors import CORSMiddleware
+
+from pydantic import BaseModel, Field
 from botocore.exceptions import NoCredentialsError, PartialCredentialsError, ClientError
 import aioboto3
 
+
+# Create log directory if it doesn't exist
+if not os.path.exists('logs'):
+    os.makedirs('logs')
+
+# Configure logging
+logging.basicConfig(
+    filename='logs/upload_logs.log',  # Log file path on the server
+    level=logging.INFO,               # Log level
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
+
+logger = logging.getLogger(__name__)
 
 tags_metadata = [
     {
@@ -74,6 +87,8 @@ AWS_SECRET_ACCESS_KEY = aws_credentials['AWS_SECRET_ACCESS_KEY']
 AWS_REGION = aws_credentials['AWS_REGION']
 AWS_URL_ENDPOINT = aws_credentials['AWS_URL_ENDPOINT']
 
+CONCURRENCY_LIMIT = 200 # Adjust this value based on your server capabilities
+
 session = aioboto3.Session()
 
 
@@ -90,7 +105,7 @@ deployments_info = load_deployments_info()
 valid_countries_names = {d['country'] for d in deployments_info if d['status'] == 'active'}
 valid_countries_location_names = {f"{d['country']} - {d['location_name']}" for d in deployments_info
                                   if d['status'] == 'active'}
-valid_data_types = {"motion_images", "snapshot_images", "audible_recordings", "ultrasound_recordings"}
+valid_data_types = {"snapshot_images", "audible_recordings", "ultrasound_recordings"}
 
 
 class UploadResponse(BaseModel):
@@ -216,7 +231,8 @@ async def update_deployment(deployment: Deployment):
 
 @app.get("/list-data/", tags=["Other"])
 async def list_data(
-        country_location_name: str = Query("", enum=sorted(list(valid_countries_location_names)), description="Country and location names."),
+        country_location_name: str = Query("", enum=sorted(list(valid_countries_location_names)),
+                                           description="Country and location names."),
         data_type: str = Query("", enum=list(valid_data_types), description="")
 ):
     country, location_name = country_location_name.split(" - ")
@@ -226,40 +242,36 @@ async def list_data(
                      and d['location_name'] == location_name][0]
     prefix = deployment_id + "/" + data_type
     files = []
-
-    async with session.client('s3',
-                              aws_access_key_id=AWS_ACCESS_KEY_ID,
-                              aws_secret_access_key=AWS_SECRET_ACCESS_KEY,
-                              region_name=AWS_REGION,
-                              endpoint_url=AWS_URL_ENDPOINT) as s3:
-        try:
-            paginator = s3.get_paginator('list_objects_v2')
+    try:
+        async with session.client('s3',
+                                  aws_access_key_id=AWS_ACCESS_KEY_ID,
+                                  aws_secret_access_key=AWS_SECRET_ACCESS_KEY,
+                                  region_name=AWS_REGION,
+                                  endpoint_url=AWS_URL_ENDPOINT) as s3_client:
+            paginator = s3_client.get_paginator('list_objects_v2')
             operation_parameters = {'Bucket': s3_bucket_name, 'Prefix': prefix}
             async for page in paginator.paginate(**operation_parameters):
                 for obj in page.get('Contents', []):
                     files.append(obj['Key'])
             return JSONResponse(status_code=200, content={"files": files})
-        except NoCredentialsError:
-            raise HTTPException(status_code=403, detail="Credentials not available")
-        except PartialCredentialsError:
-            raise HTTPException(status_code=400, detail="Incomplete credentials")
-        except ClientError:
-            raise HTTPException(status_code=404, detail="The AWS Access Key Id does not exist in our records")
-        except Exception as e:
-            print('Failed pushing log file back to server')
-            raise HTTPException(status_code=500, detail=str(e))
-        except Exception as e:
-            return JSONResponse(status_code=500, content={"message": str(e)})
+    except NoCredentialsError:
+        return JSONResponse(status_code=403, content={"Credentials not available"})
+    except PartialCredentialsError:
+        return JSONResponse(status_code=400, content={"Incomplete credentials"})
+    except ClientError:
+        return JSONResponse(status_code=404, content={"The AWS Access Key Id does not exist in our records"})
+    except Exception as e:
+        return JSONResponse(status_code=500, content={"message": str(e)})
 
 
-@app.get("/get-logs/", tags=["Other"])
-async def get_logs(country_name: str = Query("", enum=sorted(list(valid_countries_names)),
-                                             description="Country names.")):
-    country_code = [d['country_code'] for d in deployments_info if d['country'] == country_name][0]
-    s3_bucket_name = country_code.lower()
-    log_key = "logs/upload_summary.log"
-    file_content = await download_file(s3_bucket_name, log_key)
-    return Response(content=file_content, media_type="application/json5+text; charset=utf-8")
+@app.get("/logs/", tags=["Other"])
+async def get_logs():
+    try:
+        with open('logs/upload_logs.log', 'r') as log_file:
+            log_content = log_file.read()
+        return PlainTextResponse(log_content)
+    except Exception as e:
+        return JSONResponse(status_code=500, content=f"Error reading log file: {e}")
 
 
 @app.post("/create-bucket/", tags=["Other"])
@@ -267,136 +279,65 @@ async def create_bucket(bucket_name: str = Query("", description="Bucket are nam
                                                                  "Alpha-3 code, check this link: "
                                                                  "https://www.iban.com/country-codes. "
                                                                  "E.g. The United Kingdom would be gbr")):
-    print(bucket_name)
     async with session.client('s3',
                               aws_access_key_id=AWS_ACCESS_KEY_ID,
                               aws_secret_access_key=AWS_SECRET_ACCESS_KEY,
                               region_name=AWS_REGION,
-                              endpoint_url=AWS_URL_ENDPOINT) as s3:
+                              endpoint_url=AWS_URL_ENDPOINT) as s3_client:
         try:
-            await s3.create_bucket(Bucket=bucket_name, CreateBucketConfiguration={'LocationConstraint': AWS_REGION})
+            await s3_client.create_bucket(Bucket=bucket_name, CreateBucketConfiguration={'LocationConstraint': AWS_REGION})
             return JSONResponse(status_code=200, content={"message": f"Bucket '{bucket_name}' created successfully"})
-        except s3.exceptions.BucketAlreadyExists:
-            raise HTTPException(status_code=409, detail=f"Bucket {bucket_name} already exists.")
-        except s3.exceptions.BucketAlreadyOwnedByYou:
-            raise HTTPException(status_code=409, detail=f"Bucket {bucket_name} is already owned by you.")
+        except s3_client.exceptions.BucketAlreadyExists:
+            return JSONResponse(status_code=409, content={f"Bucket {bucket_name} already exists."})
+        except s3_client.exceptions.BucketAlreadyOwnedByYou:
+            return JSONResponse(status_code=409, content={f"Bucket {bucket_name} is already owned by you."})
         except Exception as e:
-            raise HTTPException(status_code=500, detail=f"Error creating bucket: {str(e)}")
+            return JSONResponse(status_code=500, content={f"Error creating bucket: {str(e)}"})
 
 
 @app.post("/upload/", tags=["Data"])
-async def upload_zip(
+async def upload(
         request: Request,
         name: str = Form(...),
         country: str = Form(...),
         deployment: str = Form(...),
         data_type: str = Form(...),
-        file: UploadFile = File(...)
+        files: List[UploadFile] = File(...)
 ):
     start_time = perf_counter()
     s3_bucket_name = country.lower()
-    key = deployment + "/" + data_type
-    uploaded_files = []
-    if not file.filename.endswith(".zip"):
-        raise HTTPException(status_code=400, detail="File is not a zip file")
+    key = f"{deployment}/{data_type}"
 
     try:
-        # Read the zip file
-        content = await file.read()
-        zipfile_obj = zipfile.ZipFile(BytesIO(content))
-
-        async with session.client('s3',
-                                  aws_access_key_id=AWS_ACCESS_KEY_ID,
-                                  aws_secret_access_key=AWS_SECRET_ACCESS_KEY,
-                                  region_name=AWS_REGION,
-                                  endpoint_url=AWS_URL_ENDPOINT) as s3:
-            # Upload each file in the zip to S3
-            for file_info in zipfile_obj.infolist():
-                # TODO: Check data type
-                # Skip directories
-                if file_info.is_dir():
-                    continue
-
-                file_data = zipfile_obj.read(file_info.filename)
-                filename = file_info.filename.split('/')[-1]
-                s3_key = key + "/" + filename
-
-                # Create an upload task
-                await asyncio.gather(*[s3.put_object(Bucket=s3_bucket_name, Key=s3_key, Body=file_data)],
-                                     return_exceptions=True)
-
-                uploaded_files.append(filename)
-    except zipfile.BadZipFile:
-        raise HTTPException(status_code=400, detail="Bad zip file")
+        # Process files in batches to avoid overwhelming the server
+        for i in range(0, len(files), CONCURRENCY_LIMIT):
+            batch = files[i:i + CONCURRENCY_LIMIT]
+            tasks = [upload_file(s3_bucket_name, key, file, name) for file in batch]
+            await asyncio.gather(*tasks)
     except Exception as e:
         print("Error:", e)
-        raise HTTPException(status_code=500, detail=str(e))
-
-    # Download log file from S3
-    log_key = "logs/upload_summary.log"
-    file_content = await download_file(s3_bucket_name, log_key)
-    if not file_content:
-        for filename in uploaded_files:
-            # Append new log entry to the log file following CLF format
-            ident = "-"
-            authuser = "-"
-            date_str = datetime.now().strftime("%d/%b/%Y:%H:%M:%S %z")
-            request_line = f'POST /upload/ HTTP/1.1'
-            status = 200
-            bytes_sent = '-'  # You can replace this with the actual byte size of the response if needed
-            file_content = file_content + (f'{request.client.host} {ident} {authuser} [{date_str}] "{request_line}" '
-                                           f'{status} {bytes_sent} Name="{name}" Country="{s3_bucket_name}" '
-                                           f'Deployment="{deployment}" DataType="{data_type}" '
-                                           f'FileName="{filename}"\n').encode()
-        # Upload updated file to S3
-        await upload_file(s3_bucket_name, log_key, file_content)
+        return JSONResponse(status_code=500, content={str(e)})
 
     end_time = perf_counter()
     print(f"{end_time - start_time} seconds.")
 
+    logger.info(f"User {name} from {country} uploaded {len(files)} {data_type} to deployment {deployment}.")
     return JSONResponse(status_code=200, content={"message": "All files uploaded and verified successfully"})
 
 
-async def download_file(bucket_name, file_key):
+async def upload_file(s3_bucket_name, key, file, name):
     async with session.client('s3',
                               aws_access_key_id=AWS_ACCESS_KEY_ID,
                               aws_secret_access_key=AWS_SECRET_ACCESS_KEY,
                               region_name=AWS_REGION,
-                              endpoint_url=AWS_URL_ENDPOINT) as s3:
-        try:
-            # Check if the file exists
-            await s3.head_object(Bucket=bucket_name, Key=file_key)
-            # If it exists, download the file content
-            response = await s3.get_object(Bucket=bucket_name, Key=file_key)
-            content = await response['Body'].read()
-            return content
-        except s3.exceptions.ClientError as e:
-            error_code = e.response['Error']['Code']
-            if error_code == '404':
-                print(f"File {file_key} does not exist. Creating with initial content...")
-                initial_content = b""
-                await s3.put_object(Bucket=bucket_name, Key=file_key, Body=initial_content)
-                return initial_content
-            else:
-                print(f"Error downloading file: {e}")
-                return None
-        except Exception as e:
-            print(f"Error downloading file: {e}")
-            return None
-
-
-async def upload_file(bucket_name, file_key, content):
-    async with session.client('s3',
-                              aws_access_key_id=AWS_ACCESS_KEY_ID,
-                              aws_secret_access_key=AWS_SECRET_ACCESS_KEY,
-                              region_name=AWS_REGION,
-                              endpoint_url=AWS_URL_ENDPOINT) as s3:
+                              endpoint_url=AWS_URL_ENDPOINT) as s3_client:
         try:
             # Upload updated file to S3
-            await s3.put_object(Bucket=bucket_name, Key=file_key, Body=content)
-            print(f"File {file_key} updated and uploaded successfully.")
+            await s3_client.upload_fileobj(file.file, s3_bucket_name, f"{key}/{file.filename}")
+            # print(f"File {key}/{file.filename} uploaded successfully.")
         except Exception as e:
-            print(f"Error uploading file: {e}")
+            logger.error(f"Error from User {name} when uploading {file.filename} to {s3_bucket_name}/{key}.")
+            return JSONResponse(status_code=500, content={"message": f"Error uploading {key}/{file.filename}: {e}"})
 
 
 if __name__ == "__main__":

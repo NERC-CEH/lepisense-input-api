@@ -67,7 +67,7 @@ Once the application is running, open your web browser and navigate to http://lo
    - **Country:** Select the country from the dropdown menu.
    - **Deployment:** Select the deployment from the dropdown menu.
    - **Data type:** Select the type of data (e.g., motion images, snapshot images, audible recordings, ultrasound recordings).
-   - **Select Zip File:** Choose the zip file you want to upload, that contains images or audio files depending on the type of data that you are uploading.
+   - **Select Files:** Choose the files you want to upload, that contains images or audio files depending on the type of data that you are uploading.
    - **Review Data:** Check the box to acknowledge that you have reviewed the data.
   
   
@@ -86,7 +86,7 @@ Once the application is running, open your web browser and navigate to http://lo
 ![api_screenshot.png](./images/api_screenshot.png)
 
 ### Data management
-- **Upload Data:** Endpoint for pushing images and audio files to the server. The files need to be compressed in zip folder not bigger than 5Gbs. 
+- **Upload Data:** Endpoint for pushing images and audio files to the server. The maximum number of files allowed each time is 1,000, to avoid crashing the server's memory. 
   ```http
   POST /upload/
   ```
@@ -95,7 +95,7 @@ Once the application is running, open your web browser and navigate to http://lo
   - `country`: `string`
   - `deployment`: `string`
   - `data_type`: `string`
-  - `file`: `.zip file`
+  - `files`: `files`
   
 
 ### Deployments
