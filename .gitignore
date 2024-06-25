@@ -7,4 +7,4 @@ commands.txt
 credentials.json
 deployments_info.csv
 ami_version.csv
-logs
+*.log

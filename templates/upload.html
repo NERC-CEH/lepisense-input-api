@@ -371,14 +371,11 @@
                 });
             });
 
-            let xhr;
-
             document.getElementById('uploadForm').addEventListener('submit', async (e) => {
                 e.preventDefault();
                 document.getElementById('response').style.display = 'none';
 
                 const formData = new FormData();
-
                 formData.append('name', document.getElementById('name').value);
                 formData.append('country', document.getElementById('country').value);
                 formData.append('deployment', document.getElementById('deployment').value);
@@ -387,64 +384,56 @@
                 const fileInput = document.getElementById('files');
                 const files = fileInput.files;
                 if (files.length === 0) {
-                    // Handle case where no file is selected (optional)
                     alert("Please select at least one file to upload");
                     return;
                 }
-                // Append each file individually to the FormData object
+
                 for (const file of files) {
                     formData.append('files', file);
                 }
-                
 
-                xhr = new XMLHttpRequest();
-                xhr.open('POST', '/upload/', true);
-
-                xhr.upload.onprogress = (event) => {
-                    document.getElementById('loader').style.display = 'block';
-                    document.getElementById('alertText').style.display = 'block';
-                    document.getElementById('cancelButton').style.display = 'inline-block';
-                };
-
-                xhr.onload = () => {
-                    const response = JSON.parse(xhr.responseText);
-                    if (xhr.status === 200) {
-                        document.getElementById('response').innerHTML = `<div class="alert alert-success" role="alert">${response.message}</div>`;
-                        document.getElementById('response').style.display = 'block';
-                        document.getElementById('uploadForm').reset();  // Clear the form
-                        document.getElementById('uploadButton').disabled = true;  // Disable the upload button again
-                    } else {
-                        document.getElementById('response').innerHTML = `<div class="alert alert-danger" role="alert">${response.message}</div>`;
-                        document.getElementById('response').style.display = 'block';
-                    }
-                    document.getElementById('loader').style.display = 'none';
-                    document.getElementById('alertText').style.display = 'none';
-                    document.getElementById('cancelButton').style.display = 'none';
-                };
-
-                xhr.onerror = () => {
-                    document.getElementById('response').innerHTML = '<div class="alert alert-danger" role="alert">Upload failed.</div>';
-                    document.getElementById('loader').style.display = 'none';
-                    document.getElementById('alertText').style.display = 'none';
-                    document.getElementById('cancelButton').style.display = 'none';
-                    document.getElementById('uploadButton').disabled = false;
-                };
-
-                xhr.onabort = () => {
-                    document.getElementById('response').innerText = '<div class="alert alert-danger" role="alert">Upload canceled.</div>';
-                    document.getElementById('loader').style.display = 'none';
-                    document.getElementById('alertText').style.display = 'none';
-                    document.getElementById('cancelButton').style.display = 'none';
-                    document.getElementById('uploadButton').disabled = false;
-                };
-
+                document.getElementById('loader').style.display = 'block';
+                document.getElementById('alertText').style.display = 'block';
+                document.getElementById('cancelButton').style.display = 'inline-block';
                 document.getElementById('uploadButton').disabled = true;
-                xhr.send(formData);
+
+                // Create an AbortController instance
+                abortController = new AbortController();
+                const signal = abortController.signal;
+
+                try {
+                    const response = await fetch('/upload/', {
+                        method: 'POST',
+                        body: formData,
+                        signal: signal // Attach the signal to the fetch request
+                    });
+
+                    const responseData = await response.json();
+                    if (response.ok) {
+                        document.getElementById('response').innerHTML = `<div class="alert alert-success" role="alert">${responseData.message}</div>`;
+                        document.getElementById('uploadForm').reset();
+                    } else {
+                        document.getElementById('response').innerHTML = `<div class="alert alert-danger" role="alert">${responseData.message}</div>`;
+                    }
+                    document.getElementById('response').style.display = 'block';
+                } catch (error) {
+                    if (error.name === 'AbortError') {
+                        document.getElementById('response').innerHTML = `<div class="alert alert-warning" role="alert">Upload cancelled</div>`;
+                    } else {
+                        document.getElementById('response').innerHTML = `<div class="alert alert-danger" role="alert">An error occurred while uploading the file</div>`;
+                    }
+                    document.getElementById('response').style.display = 'block';
+                } finally {
+                    document.getElementById('loader').style.display = 'none';
+                    document.getElementById('alertText').style.display = 'none';
+                    document.getElementById('cancelButton').style.display = 'none';
+                    document.getElementById('uploadButton').disabled = false;
+                }
             });
 
             document.getElementById('cancelButton').addEventListener('click', () => {
-                if (xhr) {
-                    xhr.abort();
+                if (abortController) {
+                    abortController.abort();
                 }
             });
 

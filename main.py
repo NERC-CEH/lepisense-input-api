@@ -16,14 +16,10 @@ from botocore.exceptions import NoCredentialsError, PartialCredentialsError, Cli
 import aioboto3
 
 
-# Create log directory if it doesn't exist
-if not os.path.exists('logs'):
-    os.makedirs('logs')
-
 # Configure logging
 logging.basicConfig(
-    filename='logs/upload_logs.log',  # Log file path on the server
-    level=logging.INFO,               # Log level
+    filename='upload_logs.log',  # Log file path on the server
+    level=logging.INFO,          # Log level
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 )
 
@@ -267,7 +263,7 @@ async def list_data(
 @app.get("/logs/", tags=["Other"])
 async def get_logs():
     try:
-        with open('logs/upload_logs.log', 'r') as log_file:
+        with open('upload_logs.log', 'r') as log_file:
             log_content = log_file.read()
         return PlainTextResponse(log_content)
     except Exception as e:
@@ -297,7 +293,6 @@ async def create_bucket(bucket_name: str = Query("", description="Bucket are nam
 
 @app.post("/upload/", tags=["Data"])
 async def upload(
-        request: Request,
         name: str = Form(...),
         country: str = Form(...),
         deployment: str = Form(...),
@@ -310,10 +305,10 @@ async def upload(
 
     try:
         # Process files in batches to avoid overwhelming the server
-        for i in range(0, len(files), CONCURRENCY_LIMIT):
-            batch = files[i:i + CONCURRENCY_LIMIT]
-            tasks = [upload_file(s3_bucket_name, key, file, name) for file in batch]
-            await asyncio.gather(*tasks)
+        # for i in range(0, len(files), CONCURRENCY_LIMIT):
+        #     batch = files[i:i + CONCURRENCY_LIMIT]
+        tasks = [upload_file(s3_bucket_name, key, file, name) for file in files]
+        await asyncio.gather(*tasks)
     except Exception as e:
         print("Error:", e)
         return JSONResponse(status_code=500, content={str(e)})
