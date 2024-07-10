@@ -7,13 +7,14 @@ import os
 import logging
 
 from fastapi import FastAPI, Form, File, UploadFile, Request, Query
-from fastapi.responses import HTMLResponse, JSONResponse, PlainTextResponse
+from fastapi.responses import HTMLResponse, JSONResponse, PlainTextResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 
 from pydantic import BaseModel, Field
 from botocore.exceptions import NoCredentialsError, PartialCredentialsError, ClientError
 import aioboto3
+import boto3
 
 
 # Configure logging
@@ -133,11 +134,16 @@ class NewDeployment(BaseModel):
     status: str = Field(default="inactive")
 
 
-@app.get("/", response_class=HTMLResponse, include_in_schema=False)
+# @app.get("/", response_class=HTMLResponse, include_in_schema=False)
+# async def main():
+#     with open("templates/upload.html") as f:
+#         html_content = f.read()
+#     return HTMLResponse(content=html_content)
+
+
+@app.get("/", include_in_schema=False)
 async def main():
-    with open("templates/upload.html") as f:
-        html_content = f.read()
-    return HTMLResponse(content=html_content)
+    return RedirectResponse(url="/docs")
 
 
 @app.get("/get-deployments/", tags=["Deployments"])
@@ -289,6 +295,38 @@ async def create_bucket(bucket_name: str = Query("", description="Bucket are nam
             return JSONResponse(status_code=409, content={f"Bucket {bucket_name} is already owned by you."})
         except Exception as e:
             return JSONResponse(status_code=500, content={f"Error creating bucket: {str(e)}"})
+
+
+@app.post("/generate-presigned-post", tags=["Data"])
+async def generate_presigned_post(
+    name: str = Form(...),
+    country: str = Form(...),
+    deployment: str = Form(...),
+    data_type: str = Form(...),
+    filename: str = Form(...)
+    ):
+    bucket_name = country.lower()
+    key = f"{deployment}/{data_type}/{filename}"
+
+    s3 = boto3.client('s3',
+                      aws_access_key_id=AWS_ACCESS_KEY_ID,
+                      aws_secret_access_key=AWS_SECRET_ACCESS_KEY,
+                      region_name=AWS_REGION,
+                      endpoint_url=AWS_URL_ENDPOINT)
+    try:
+        # Generate a presigned URL for the S3
+        presigned_url = s3.generate_presigned_url('put_object',
+                                                  Params={"Bucket": bucket_name,
+                                                          "Key": key},
+                                                  ExpiresIn=3600)  # URL expires in 1 hour
+
+        return JSONResponse(status_code=200, content=presigned_url)
+    except NoCredentialsError:
+        return JSONResponse(status_code=403, content={"error": "No AWS credentials found"})
+    except PartialCredentialsError:
+        return JSONResponse(status_code=403, content={"error": "Incomplete AWS credentials"})
+    except Exception as e:
+        return JSONResponse(status_code=500, content={"error": str(e)})
 
 
 @app.post("/upload/", tags=["Data"])
