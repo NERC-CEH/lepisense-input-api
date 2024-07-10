@@ -297,8 +297,8 @@ async def create_bucket(bucket_name: str = Query("", description="Bucket are nam
             return JSONResponse(status_code=500, content={f"Error creating bucket: {str(e)}"})
 
 
-@app.post("/generate-presigned-post", tags=["Data"])
-async def generate_presigned_post(
+@app.post("/generate-presigned-url", tags=["Data"])
+async def generate_presigned_url(
     name: str = Form(...),
     country: str = Form(...),
     deployment: str = Form(...),
