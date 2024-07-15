@@ -303,7 +303,8 @@ async def generate_presigned_url(
     country: str = Form(...),
     deployment: str = Form(...),
     data_type: str = Form(...),
-    filename: str = Form(...)
+    filename: str = Form(...),
+    file_type: str = Form(...)
     ):
     bucket_name = country.lower()
     key = f"{deployment}/{data_type}/{filename}"
@@ -317,7 +318,8 @@ async def generate_presigned_url(
         # Generate a presigned URL for the S3
         presigned_url = s3.generate_presigned_url('put_object',
                                                   Params={"Bucket": bucket_name,
-                                                          "Key": key},
+                                                          "Key": key,
+                                                          "ContentType": file_type},
                                                   ExpiresIn=3600)  # URL expires in 1 hour
 
         return JSONResponse(status_code=200, content=presigned_url)
