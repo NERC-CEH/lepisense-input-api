@@ -370,13 +370,13 @@ async def upload_file(s3_bucket_name, key, file, name):
             return JSONResponse(status_code=500, content={"message": f"Error uploading {key}/{file.filename}: {e}"})
 
 
-@app.get("/check-file-exist/", tags=["Data"])
+@app.post("/check-file-exist/", tags=["Data"])
 async def check_file_exist(
-    name: str,
-    country: str,
-    deployment: str,
-    data_type: str,
-    filename: str
+    name: str = Form(...),
+    country: str = Form(...),
+    deployment: str = Form(...),
+    data_type: str = Form(...),
+    filename: str = Form(...)
 ):
     bucket_name = country.lower()
     key = f"{deployment}/{data_type}/{filename}"
@@ -389,10 +389,12 @@ async def check_file_exist(
 
     try:
         s3.head_object(Bucket=bucket_name, Key=key)
-        return {"exists": True}  # File exists
+        message = {"exists": True}  # File exists
+        return JSONResponse(status_code=200, content=message)
     except s3.exceptions.ClientError as e:
         if e.response['Error']['Code'] == '404':
-            return {"exists": False}  # File doesn't exist
+            message = {"exists": False}  # File doesn't exist
+            return JSONResponse(status_code=200, content=message)
         return JSONResponse(status_code=500, content={"message": f"{e}"})
     except NoCredentialsError:
         return JSONResponse(status_code=403, content={"message": "No AWS credentials found"})
@@ -400,6 +402,7 @@ async def check_file_exist(
         return JSONResponse(status_code=403, content={"message": "Incomplete AWS credentials"})
     except Exception as e:
         return JSONResponse(status_code=500, content={"message": f"{e}"})
+    
 
 
 if __name__ == "__main__":
