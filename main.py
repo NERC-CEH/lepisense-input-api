@@ -297,7 +297,7 @@ async def create_bucket(bucket_name: str = Query("", description="Bucket are nam
             return JSONResponse(status_code=500, content={f"Error creating bucket: {str(e)}"})
 
 
-@app.post("/generate-presigned-url", tags=["Data"])
+@app.post("/generate-presigned-url/", tags=["Data"])
 async def generate_presigned_url(
     name: str = Form(...),
     country: str = Form(...),
@@ -370,7 +370,7 @@ async def upload_file(s3_bucket_name, key, file, name):
             return JSONResponse(status_code=500, content={"message": f"Error uploading {key}/{file.filename}: {e}"})
 
 
-@app.get("/check-file-exist", tags=["Data"])
+@app.get("/check-file-exist/", tags=["Data"])
 async def check_file_exist(
     name: str,
     country: str,
