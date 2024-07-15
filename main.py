@@ -327,7 +327,7 @@ async def generate_presigned_url(
         return JSONResponse(status_code=403, content={"error": "Incomplete AWS credentials"})
     except Exception as e:
         return JSONResponse(status_code=500, content={"error": str(e)})
-
+    
 
 @app.post("/upload/", tags=["Data"])
 async def upload(
@@ -342,9 +342,6 @@ async def upload(
     key = f"{deployment}/{data_type}"
 
     try:
-        # Process files in batches to avoid overwhelming the server
-        # for i in range(0, len(files), CONCURRENCY_LIMIT):
-        #     batch = files[i:i + CONCURRENCY_LIMIT]
         tasks = [upload_file(s3_bucket_name, key, file, name) for file in files]
         await asyncio.gather(*tasks)
     except Exception as e:
@@ -371,6 +368,38 @@ async def upload_file(s3_bucket_name, key, file, name):
         except Exception as e:
             logger.error(f"Error from User {name} when uploading {file.filename} to {s3_bucket_name}/{key}.")
             return JSONResponse(status_code=500, content={"message": f"Error uploading {key}/{file.filename}: {e}"})
+
+
+@app.get("/check-file-exist", tags=["Data"])
+async def check_file_exist(
+    name: str,
+    country: str,
+    deployment: str,
+    data_type: str,
+    filename: str
+):
+    bucket_name = country.lower()
+    key = f"{deployment}/{data_type}/{filename}"
+
+    s3 = boto3.client('s3',
+                      aws_access_key_id=AWS_ACCESS_KEY_ID,
+                      aws_secret_access_key=AWS_SECRET_ACCESS_KEY,
+                      region_name=AWS_REGION,
+                      endpoint_url=AWS_URL_ENDPOINT)
+
+    try:
+        s3.head_object(Bucket=bucket_name, Key=key)
+        return {"exists": True}  # File exists
+    except s3.exceptions.ClientError as e:
+        if e.response['Error']['Code'] == '404':
+            return {"exists": False}  # File doesn't exist
+        return JSONResponse(status_code=500, content={"message": f"{e}"})
+    except NoCredentialsError:
+        return JSONResponse(status_code=403, content={"message": "No AWS credentials found"})
+    except PartialCredentialsError:
+        return JSONResponse(status_code=403, content={"message": "Incomplete AWS credentials"})
+    except Exception as e:
+        return JSONResponse(status_code=500, content={"message": f"{e}"})
 
 
 if __name__ == "__main__":
