@@ -54,30 +54,9 @@ Start the application using Uvicorn:
 ```sh
 uvicorn main:app --port 8080 --reload
 ```
-
-## Using the Upload Page
-
-### Accessing the Upload Page
-Once the application is running, open your web browser and navigate to http://localhost:8080/. You will see a form that allows you to upload files.
-![upload_form_screenshot.png](./images/upload_form_screenshot.png)
-
-### Uploading Files
-1. **Fill in the form::** 
-   - **Your Full Name:** Enter your full name.
-   - **Country:** Select the country from the dropdown menu.
-   - **Deployment:** Select the deployment from the dropdown menu.
-   - **Data type:** Select the type of data (e.g., motion images, snapshot images, audible recordings, ultrasound recordings).
-   - **Select Files:** Choose the files you want to upload, that contains images or audio files depending on the type of data that you are uploading.
-   - **Review Data:** Check the box to acknowledge that you have reviewed the data.
   
   
-2. **Upload the files::**
-   - Click the ```Upload``` button to start the upload process.
-   - A spinner will appear, and an alert will notify you not to close or refresh the page while uploading.
-   - Once the upload is complete, a success message will be displayed.
-  
-  
-## Endpoints
+## API Endpoints
 
 ### Documentation
 - **Swagger UI:** [http://localhost:8080/docs](http://localhost:8080/docs)
@@ -86,6 +65,18 @@ Once the application is running, open your web browser and navigate to http://lo
 ![api_screenshot.png](./images/api_screenshot.png)
 
 ### Data management
+- **Generate presigned url:** Endpoint for creating unique urls for pushing images and audio files to the server.  
+  ```http
+  POST /upload/
+  ```
+  Form Data:
+  - `name`: `string`
+  - `country`: `string`
+  - `deployment`: `string`
+  - `data_type`: `string`
+  - `filename`: `string`
+  - `file_type`: `string`
+
 - **Upload Data:** Endpoint for pushing images and audio files to the server. The maximum number of files allowed each time is 1,000, to avoid crashing the server's memory. 
   ```http
   POST /upload/
@@ -96,6 +87,17 @@ Once the application is running, open your web browser and navigate to http://lo
   - `deployment`: `string`
   - `data_type`: `string`
   - `files`: `files`
+
+- **Ckeck if file exist:** Endpoint for checking if file already exists in the bucket.
+  ```http
+  POST /upload/
+  ```
+  Form Data:
+  - `name`: `string`
+  - `country`: `string`
+  - `deployment`: `string`
+  - `data_type`: `string`
+  - `filename`: `string`
   
 
 ### Deployments
