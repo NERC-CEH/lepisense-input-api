@@ -178,38 +178,7 @@ date and time, username, country, deployment, data type and filename.
     "bucket_name": "your_bucket_name"
   }
   ```
-  
-## Python Scripts
 
-This repository also contains additional Python scripts located in the `python_scripts` folder. Below are the details of each script and its purpose:
-
-1. **s3_bucket_info.py**:
-   - **Description**: This script is used for get information on what data is store in a particular bucket. You can filter 
-   - **Usage**: 
-     - Update the operation parameters with the bucket name (country name) and the prefix (deployment id) that you would like to check in this line of code:  
-     ```operation_parameters = {'Bucket': '', 'Prefix': ''}```
-     - Run the script on your terminal using this command:  
-     ```python s3_bucket_info.py```
-
-2. **s3_delete_objects.py**:
-   - **Description**: This script handles deletes the content of a whole bucket or you can specify which deployment. Be very careful when you use it, it can't be undone.
-   - **Usage**: 
-     - Update the bucket name (country name) and the prefix (deployment id) that you would like to delete in this line of code:  
-     ```bucket = s3.Bucket('')```  
-     ```prefix = ""```  
-     - Run the script on your terminal using this command:  
-     ```python s3_delete_objects.py```
-
-3. **s3_download.py**:
-   - **Description**: This script allows you to download the data from a bucket, and you can also specify the deployment.
-   - **Usage**: 
-     - Update the bucket name (country name), the prefix (deployment id) and the folder where you would like to download the data in this line of code:  
-     ```BUCKET_NAME = s3.Bucket('')```  
-     ```PREFIX = ""```  
-     ```LOCAL_DOWNLOAD_PATH = r"/path/to/local/folder"```
-     - Run the script on your terminal using this command:  
-     ```python s3_download.py```
-  
 
 ## Contributing
 Feel free to fork this repository and create a pull request. For major changes, please open an issue first to discuss what you would like to change.
