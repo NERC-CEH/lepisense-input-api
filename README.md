@@ -67,7 +67,7 @@ uvicorn main:app --port 8080 --reload
 ### Data management
 - **Generate presigned url:** Endpoint for creating unique urls for pushing images and audio files to the server.  
   ```http
-  POST /upload/
+  POST /generate-presigned-url/
   ```
   Form Data:
   - `name`: `string`
@@ -90,7 +90,7 @@ uvicorn main:app --port 8080 --reload
 
 - **Ckeck if file exist:** Endpoint for checking if file already exists in the bucket.
   ```http
-  POST /upload/
+  POST /check-file-exist/
   ```
   Form Data:
   - `name`: `string`
