@@ -368,7 +368,7 @@ async def upload_file(s3_bucket_name, key, file, name):
             await s3_client.upload_fileobj(file.file, s3_bucket_name, f"{key}/{file.filename}")
             # print(f"File {key}/{file.filename} uploaded successfully.")
         except Exception as e:
-            logger.error(f"Error from User {name} when uploading {file.filename} to {s3_bucket_name}/{key}.")
+            logger.error(f"Error from User {name} when uploading {file.filename} to {s3_bucket_name}/{key}. Error: {e}")
             return JSONResponse(status_code=500, content={"message": f"Error uploading {key}/{file.filename}: {e}"})
 
 
