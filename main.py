@@ -102,7 +102,7 @@ deployments_info = load_deployments_info()
 valid_countries_names = {d['country'] for d in deployments_info if d['status'] == 'active'}
 valid_countries_location_names = {f"{d['country']} - {d['location_name']}" for d in deployments_info
                                   if d['status'] == 'active'}
-valid_data_types = {"snapshot_images", "audible_recordings", "ultrasound_recordings"}
+valid_data_types = {"snapshot_images", "audible_recordings", "ultrasound_recordings", "motion_images"} # DC add "motion images"
 
 
 class UploadResponse(BaseModel):
@@ -265,6 +265,44 @@ async def list_data(
     except Exception as e:
         return JSONResponse(status_code=500, content={"message": str(e)})
 
+@app.get("/count-data/", tags=["Other"])
+async def count_data(
+        country_location_name: str = Query("", enum=sorted(list(valid_countries_location_names)),
+                                           description="Country and location names."),
+        data_type: str = Query("", enum=list(valid_data_types), description="")
+):
+    country, location_name = country_location_name.split(" - ")
+    country_code = [d['country_code'] for d in deployments_info if d['country'] == country][0]
+    s3_bucket_name = country_code.lower()
+    deployment_id = [d['deployment_id'] for d in deployments_info if d['country'] == country
+                     and d['location_name'] == location_name][0]
+    prefix = deployment_id + "/" + data_type
+    files = []
+    try:
+        async with session.client('s3',
+                                  aws_access_key_id=AWS_ACCESS_KEY_ID,
+                                  aws_secret_access_key=AWS_SECRET_ACCESS_KEY,
+                                  region_name=AWS_REGION,
+                                  endpoint_url=AWS_URL_ENDPOINT) as s3_client:
+            paginator = s3_client.get_paginator('list_objects_v2')
+            operation_parameters = {'Bucket': s3_bucket_name, 'Prefix': prefix}
+
+            count = 0
+
+            async for page in paginator.paginate(**operation_parameters):
+
+                count += page["KeyCount"]
+                # for obj in page.get('Contents', []):
+                #     files.append(obj['Key'])
+            return JSONResponse(status_code=200, content={"count": count})
+    except NoCredentialsError:
+        return JSONResponse(status_code=403, content={"Credentials not available"})
+    except PartialCredentialsError:
+        return JSONResponse(status_code=400, content={"Incomplete credentials"})
+    except ClientError:
+        return JSONResponse(status_code=404, content={"The AWS Access Key Id does not exist in our records"})
+    except Exception as e:
+        return JSONResponse(status_code=500, content={"message": str(e)})
 
 @app.get("/logs/", tags=["Other"])
 async def get_logs():
@@ -328,8 +366,7 @@ async def generate_presigned_url(
     except PartialCredentialsError:
         return JSONResponse(status_code=403, content={"error": "Incomplete AWS credentials"})
     except Exception as e:
-        return JSONResponse(status_code=500, content={"error": str(e)})
-
+        return JSONResponse(status_code=500, content={"error": str(e)})  
 
 @app.post("/upload/", tags=["Data"])
 async def upload(
@@ -344,9 +381,6 @@ async def upload(
     key = f"{deployment}/{data_type}"
 
     try:
-        # Process files in batches to avoid overwhelming the server
-        # for i in range(0, len(files), CONCURRENCY_LIMIT):
-        #     batch = files[i:i + CONCURRENCY_LIMIT]
         tasks = [upload_file(s3_bucket_name, key, file, name) for file in files]
         await asyncio.gather(*tasks)
     except Exception as e:
@@ -371,9 +405,8 @@ async def upload_file(s3_bucket_name, key, file, name):
             await s3_client.upload_fileobj(file.file, s3_bucket_name, f"{key}/{file.filename}")
             # print(f"File {key}/{file.filename} uploaded successfully.")
         except Exception as e:
-            logger.error(f"Error from User {name} when uploading {file.filename} to {s3_bucket_name}/{key}.")
+            logger.error(f"Error from User {name} when uploading {file.filename} to {s3_bucket_name}/{key}. Error: {e}")
             return JSONResponse(status_code=500, content={"message": f"Error uploading {key}/{file.filename}: {e}"})
-
 
 @app.post("/check-file-exist/", tags=["Data"])
 async def check_file_exist(
@@ -407,7 +440,6 @@ async def check_file_exist(
         return JSONResponse(status_code=403, content={"message": "Incomplete AWS credentials"})
     except Exception as e:
         return JSONResponse(status_code=500, content={"message": f"{e}"})
-    
 
 if __name__ == "__main__":
     import uvicorn
