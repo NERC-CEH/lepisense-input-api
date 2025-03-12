@@ -7,4 +7,5 @@ commands.txt
 credentials.json
 deployments_info.csv
 ami_version.csv
-*.log
+key_commands_for_updating_api.txt
+deployments_info*

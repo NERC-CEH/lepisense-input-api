@@ -143,7 +143,7 @@ class NewDeployment(BaseModel):
 
 @app.get("/", include_in_schema=False)
 async def main():
-    return RedirectResponse(url="/docs")
+    return RedirectResponse(url="/ami-data-upload/docs")
 
 
 @app.get("/get-deployments/", tags=["Deployments"])
@@ -329,7 +329,7 @@ async def generate_presigned_url(
         return JSONResponse(status_code=403, content={"error": "Incomplete AWS credentials"})
     except Exception as e:
         return JSONResponse(status_code=500, content={"error": str(e)})
-    
+
 
 @app.post("/upload/", tags=["Data"])
 async def upload(
@@ -344,6 +344,9 @@ async def upload(
     key = f"{deployment}/{data_type}"
 
     try:
+        # Process files in batches to avoid overwhelming the server
+        # for i in range(0, len(files), CONCURRENCY_LIMIT):
+        #     batch = files[i:i + CONCURRENCY_LIMIT]
         tasks = [upload_file(s3_bucket_name, key, file, name) for file in files]
         await asyncio.gather(*tasks)
     except Exception as e:
@@ -368,7 +371,7 @@ async def upload_file(s3_bucket_name, key, file, name):
             await s3_client.upload_fileobj(file.file, s3_bucket_name, f"{key}/{file.filename}")
             # print(f"File {key}/{file.filename} uploaded successfully.")
         except Exception as e:
-            logger.error(f"Error from User {name} when uploading {file.filename} to {s3_bucket_name}/{key}. Error: {e}")
+            logger.error(f"Error from User {name} when uploading {file.filename} to {s3_bucket_name}/{key}.")
             return JSONResponse(status_code=500, content={"message": f"Error uploading {key}/{file.filename}: {e}"})
 
 
@@ -405,7 +408,6 @@ async def check_file_exist(
     except Exception as e:
         return JSONResponse(status_code=500, content={"message": f"{e}"})
     
-
 
 if __name__ == "__main__":
     import uvicorn

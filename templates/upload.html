@@ -334,7 +334,7 @@
                 const deploymentSelect = document.getElementById('deployment');
                 const fileInput = document.getElementById('files');
 
-                const response = await fetch('/get-deployments/');
+                const response = await fetch('/ami-data-upload/get-deployments/');
                 const data = await response.json();
 
                 const countries = [...new Map(data.map(item => [item.country_code, item.country])).entries()];
@@ -402,7 +402,7 @@
                 const signal = abortController.signal;
 
                 try {
-                    const response = await fetch('/upload/', {
+                    const response = await fetch('/ami-data-upload/upload/', {
                         method: 'POST',
                         body: formData,
                         signal: signal // Attach the signal to the fetch request

@@ -54,9 +54,30 @@ Start the application using Uvicorn:
 ```sh
 uvicorn main:app --port 8080 --reload
 ```
+
+## Using the Upload Page
+
+### Accessing the Upload Page
+Once the application is running, open your web browser and navigate to http://localhost:8080/. You will see a form that allows you to upload files.
+![upload_form_screenshot.png](./images/upload_form_screenshot.png)
+
+### Uploading Files
+1. **Fill in the form::** 
+   - **Your Full Name:** Enter your full name.
+   - **Country:** Select the country from the dropdown menu.
+   - **Deployment:** Select the deployment from the dropdown menu.
+   - **Data type:** Select the type of data (e.g., motion images, snapshot images, audible recordings, ultrasound recordings).
+   - **Select Zip File:** Choose the zip file you want to upload, that contains images or audio files depending on the type of data that you are uploading.
+   - **Review Data:** Check the box to acknowledge that you have reviewed the data.
   
   
-## API Endpoints
+2. **Upload the files::**
+   - Click the ```Upload``` button to start the upload process.
+   - A spinner will appear, and an alert will notify you not to close or refresh the page while uploading.
+   - Once the upload is complete, a success message will be displayed.
+  
+  
+## Endpoints
 
 ### Documentation
 - **Swagger UI:** [http://localhost:8080/docs](http://localhost:8080/docs)
@@ -65,19 +86,7 @@ uvicorn main:app --port 8080 --reload
 ![api_screenshot.png](./images/api_screenshot.png)
 
 ### Data management
-- **Generate presigned url:** Endpoint for creating unique urls for pushing images and audio files to the server.  
-  ```http
-  POST /generate-presigned-url/
-  ```
-  Form Data:
-  - `name`: `string`
-  - `country`: `string`
-  - `deployment`: `string`
-  - `data_type`: `string`
-  - `filename`: `string`
-  - `file_type`: `string`
-
-- **Upload Data:** Endpoint for pushing images and audio files to the server. The maximum number of files allowed each time is 1,000, to avoid crashing the server's memory. 
+- **Upload Data:** Endpoint for pushing images and audio files to the server. The files need to be compressed in zip folder not bigger than 5Gbs. 
   ```http
   POST /upload/
   ```
@@ -86,18 +95,7 @@ uvicorn main:app --port 8080 --reload
   - `country`: `string`
   - `deployment`: `string`
   - `data_type`: `string`
-  - `files`: `files`
-
-- **Ckeck if file exist:** Endpoint for checking if file already exists in the bucket.
-  ```http
-  POST /check-file-exist/
-  ```
-  Form Data:
-  - `name`: `string`
-  - `country`: `string`
-  - `deployment`: `string`
-  - `data_type`: `string`
-  - `filename`: `string`
+  - `file`: `.zip file`
   
 
 ### Deployments
@@ -178,7 +176,38 @@ date and time, username, country, deployment, data type and filename.
     "bucket_name": "your_bucket_name"
   }
   ```
+  
+## Python Scripts
 
+This repository also contains additional Python scripts located in the `python_scripts` folder. Below are the details of each script and its purpose:
+
+1. **s3_bucket_info.py**:
+   - **Description**: This script is used for get information on what data is store in a particular bucket. You can filter 
+   - **Usage**: 
+     - Update the operation parameters with the bucket name (country name) and the prefix (deployment id) that you would like to check in this line of code:  
+     ```operation_parameters = {'Bucket': '', 'Prefix': ''}```
+     - Run the script on your terminal using this command:  
+     ```python s3_bucket_info.py```
+
+2. **s3_delete_objects.py**:
+   - **Description**: This script handles deletes the content of a whole bucket or you can specify which deployment. Be very careful when you use it, it can't be undone.
+   - **Usage**: 
+     - Update the bucket name (country name) and the prefix (deployment id) that you would like to delete in this line of code:  
+     ```bucket = s3.Bucket('')```  
+     ```prefix = ""```  
+     - Run the script on your terminal using this command:  
+     ```python s3_delete_objects.py```
+
+3. **s3_download.py**:
+   - **Description**: This script allows you to download the data from a bucket, and you can also specify the deployment.
+   - **Usage**: 
+     - Update the bucket name (country name), the prefix (deployment id) and the folder where you would like to download the data in this line of code:  
+     ```BUCKET_NAME = s3.Bucket('')```  
+     ```PREFIX = ""```  
+     ```LOCAL_DOWNLOAD_PATH = r"/path/to/local/folder"```
+     - Run the script on your terminal using this command:  
+     ```python s3_download.py```
+  
 
 ## Contributing
 Feel free to fork this repository and create a pull request. For major changes, please open an issue first to discuss what you would like to change.
