@@ -10,3 +10,5 @@ ami_version.csv
 key_commands_for_updating_api.txt
 deployments_info*
 may_delete.json
+upload_to_api_commands.txt
+rsconnect-python/ami-api.json

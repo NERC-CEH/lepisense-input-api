@@ -88,17 +88,16 @@ CONCURRENCY_LIMIT = 200 # Adjust this value based on your server capabilities
 
 session = aioboto3.Session()
 
-
 def load_deployments_info():
     deployments = []
-    with open('deployments_info.csv', newline='') as csvfile:
+    with open('deployments_info.csv', newline='', encoding='utf-8-sig') as csvfile:
         reader = csv.DictReader(csvfile)
         for row in reader:
             deployments.append(row)
     return deployments
 
-
 deployments_info = load_deployments_info()
+
 valid_countries_names = {d['country'] for d in deployments_info if d['status'] == 'active'}
 valid_countries_location_names = {f"{d['country']} - {d['location_name']}" for d in deployments_info
                                   if d['status'] == 'active'}
@@ -143,7 +142,7 @@ class NewDeployment(BaseModel):
 
 @app.get("/", include_in_schema=False)
 async def main():
-    return RedirectResponse(url="/ami-data-upload/docs")
+    return RedirectResponse(url="/ami-data-upload/docs") # docs
 
 
 @app.get("/get-deployments/", tags=["Deployments"])
