@@ -15,6 +15,7 @@ from pydantic import BaseModel, Field
 from botocore.exceptions import NoCredentialsError, PartialCredentialsError, ClientError
 import aioboto3
 import boto3
+from mangum import Mangum
 
 
 # Configure logging
@@ -56,6 +57,8 @@ app = FastAPI(
     openapi_tags=tags_metadata
 )
 
+handler = Mangum(app, lifespan="off")
+
 # Set up CORS middleware
 origins = [
     "http://localhost",
@@ -84,9 +87,10 @@ AWS_SECRET_ACCESS_KEY = aws_credentials['AWS_SECRET_ACCESS_KEY']
 AWS_REGION = aws_credentials['AWS_REGION']
 AWS_URL_ENDPOINT = aws_credentials['AWS_URL_ENDPOINT']
 
-CONCURRENCY_LIMIT = 200 # Adjust this value based on your server capabilities
+CONCURRENCY_LIMIT = 200  # Adjust this value based on your server capabilities
 
 session = aioboto3.Session()
+
 
 def load_deployments_info():
     deployments = []
@@ -96,12 +100,15 @@ def load_deployments_info():
             deployments.append(row)
     return deployments
 
+
 deployments_info = load_deployments_info()
 
-valid_countries_names = {d['country'] for d in deployments_info if d['status'] == 'active'}
+valid_countries_names = {d['country']
+                         for d in deployments_info if d['status'] == 'active'}
 valid_countries_location_names = {f"{d['country']} - {d['location_name']}" for d in deployments_info
                                   if d['status'] == 'active'}
-valid_data_types = {"snapshot_images", "audible_recordings", "ultrasound_recordings", "motion_images"} # DC add "motion images"
+valid_data_types = {"snapshot_images", "audible_recordings",
+                    "ultrasound_recordings", "motion_images"}  # DC add "motion images"
 
 
 class UploadResponse(BaseModel):
@@ -142,7 +149,7 @@ class NewDeployment(BaseModel):
 
 @app.get("/", include_in_schema=False)
 async def main():
-    return RedirectResponse(url="/ami-data-upload/docs") # docs
+    return RedirectResponse(url="/docs")  # docs
 
 
 @app.get("/get-deployments/", tags=["Deployments"])
@@ -237,7 +244,8 @@ async def list_data(
         data_type: str = Query("", enum=list(valid_data_types), description="")
 ):
     country, location_name = country_location_name.split(" - ")
-    country_code = [d['country_code'] for d in deployments_info if d['country'] == country][0]
+    country_code = [d['country_code']
+                    for d in deployments_info if d['country'] == country][0]
     s3_bucket_name = country_code.lower()
     deployment_id = [d['deployment_id'] for d in deployments_info if d['country'] == country
                      and d['location_name'] == location_name][0]
@@ -264,6 +272,7 @@ async def list_data(
     except Exception as e:
         return JSONResponse(status_code=500, content={"message": str(e)})
 
+
 @app.get("/count-data/", tags=["Other"])
 async def count_data(
         country_location_name: str = Query("", enum=sorted(list(valid_countries_location_names)),
@@ -271,7 +280,8 @@ async def count_data(
         data_type: str = Query("", enum=list(valid_data_types), description="")
 ):
     country, location_name = country_location_name.split(" - ")
-    country_code = [d['country_code'] for d in deployments_info if d['country'] == country][0]
+    country_code = [d['country_code']
+                    for d in deployments_info if d['country'] == country][0]
     s3_bucket_name = country_code.lower()
     deployment_id = [d['deployment_id'] for d in deployments_info if d['country'] == country
                      and d['location_name'] == location_name][0]
@@ -302,6 +312,7 @@ async def count_data(
         return JSONResponse(status_code=404, content={"The AWS Access Key Id does not exist in our records"})
     except Exception as e:
         return JSONResponse(status_code=500, content={"message": str(e)})
+
 
 @app.get("/logs/", tags=["Other"])
 async def get_logs():
@@ -342,7 +353,7 @@ async def generate_presigned_url(
     data_type: str = Form(...),
     filename: str = Form(...),
     file_type: str = Form(...)
-    ):
+):
     bucket_name = country.lower()
     key = f"{deployment}/{data_type}/{filename}"
 
@@ -365,7 +376,8 @@ async def generate_presigned_url(
     except PartialCredentialsError:
         return JSONResponse(status_code=403, content={"error": "Incomplete AWS credentials"})
     except Exception as e:
-        return JSONResponse(status_code=500, content={"error": str(e)})  
+        return JSONResponse(status_code=500, content={"error": str(e)})
+
 
 @app.post("/upload/", tags=["Data"])
 async def upload(
@@ -380,7 +392,8 @@ async def upload(
     key = f"{deployment}/{data_type}"
 
     try:
-        tasks = [upload_file(s3_bucket_name, key, file, name) for file in files]
+        tasks = [upload_file(s3_bucket_name, key, file, name)
+                 for file in files]
         await asyncio.gather(*tasks)
     except Exception as e:
         print("Error:", e)
@@ -389,7 +402,8 @@ async def upload(
     end_time = perf_counter()
     print(f"{end_time - start_time} seconds.")
 
-    logger.info(f"User {name} from {country} uploaded {len(files)} {data_type} to deployment {deployment}.")
+    logger.info(
+        f"User {name} from {country} uploaded {len(files)} {data_type} to deployment {deployment}.")
     return JSONResponse(status_code=200, content={"message": "All files uploaded and verified successfully"})
 
 
@@ -404,8 +418,10 @@ async def upload_file(s3_bucket_name, key, file, name):
             await s3_client.upload_fileobj(file.file, s3_bucket_name, f"{key}/{file.filename}")
             # print(f"File {key}/{file.filename} uploaded successfully.")
         except Exception as e:
-            logger.error(f"Error from User {name} when uploading {file.filename} to {s3_bucket_name}/{key}. Error: {e}")
+            logger.error(
+                f"Error from User {name} when uploading {file.filename} to {s3_bucket_name}/{key}. Error: {e}")
             return JSONResponse(status_code=500, content={"message": f"Error uploading {key}/{file.filename}: {e}"})
+
 
 @app.post("/check-file-exist/", tags=["Data"])
 async def check_file_exist(

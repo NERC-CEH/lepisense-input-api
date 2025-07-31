@@ -12,3 +12,4 @@ deployments_info*
 may_delete.json
 upload_to_api_commands.txt
 rsconnect-python/ami-api.json
+.aws-sam/*
