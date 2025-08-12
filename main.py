@@ -78,15 +78,6 @@ app.add_middleware(
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
 
-# Load AWS credentials and S3 bucket name from config file
-with open('credentials.json') as config_file:
-    aws_credentials = json.load(config_file)
-
-AWS_ACCESS_KEY_ID = aws_credentials['AWS_ACCESS_KEY_ID']
-AWS_SECRET_ACCESS_KEY = aws_credentials['AWS_SECRET_ACCESS_KEY']
-AWS_REGION = aws_credentials['AWS_REGION']
-AWS_URL_ENDPOINT = aws_credentials['AWS_URL_ENDPOINT']
-
 CONCURRENCY_LIMIT = 200  # Adjust this value based on your server capabilities
 
 session = aioboto3.Session()
@@ -239,24 +230,23 @@ async def update_deployment(deployment: Deployment):
 
 @app.get("/list-data/", tags=["Other"])
 async def list_data(
-        country_location_name: str = Query("", enum=sorted(list(valid_countries_location_names)),
-                                           description="Country and location names."),
+        country_location_name: str = Query(
+            "",
+            enum=sorted(list(valid_countries_location_names)),
+            description="Country and location names."
+        ),
         data_type: str = Query("", enum=list(valid_data_types), description="")
 ):
     country, location_name = country_location_name.split(" - ")
     country_code = [d['country_code']
                     for d in deployments_info if d['country'] == country][0]
-    s3_bucket_name = country_code.lower()
+    s3_bucket_name = 'lepisense-images'
     deployment_id = [d['deployment_id'] for d in deployments_info if d['country'] == country
                      and d['location_name'] == location_name][0]
     prefix = deployment_id + "/" + data_type
     files = []
     try:
-        async with session.client('s3',
-                                  aws_access_key_id=AWS_ACCESS_KEY_ID,
-                                  aws_secret_access_key=AWS_SECRET_ACCESS_KEY,
-                                  region_name=AWS_REGION,
-                                  endpoint_url=AWS_URL_ENDPOINT) as s3_client:
+        async with session.client('s3') as s3_client:
             paginator = s3_client.get_paginator('list_objects_v2')
             operation_parameters = {'Bucket': s3_bucket_name, 'Prefix': prefix}
             async for page in paginator.paginate(**operation_parameters):
@@ -264,13 +254,17 @@ async def list_data(
                     files.append(obj['Key'])
             return JSONResponse(status_code=200, content={"files": files})
     except NoCredentialsError:
-        return JSONResponse(status_code=403, content={"Credentials not available"})
+        return JSONResponse(
+            status_code=403, content={"message": "Credentials not available"})
     except PartialCredentialsError:
-        return JSONResponse(status_code=400, content={"Incomplete credentials"})
+        return JSONResponse(
+            status_code=400, content={"message": "Incomplete credentials"})
     except ClientError:
-        return JSONResponse(status_code=404, content={"The AWS Access Key Id does not exist in our records"})
+        return JSONResponse(
+            status_code=404, content={"message": "The AWS Access Key Id does not exist in our records"})
     except Exception as e:
-        return JSONResponse(status_code=500, content={"message": str(e)})
+        return JSONResponse(
+            status_code=500, content={"message": str(e)})
 
 
 @app.get("/count-data/", tags=["Other"])
@@ -288,11 +282,7 @@ async def count_data(
     prefix = deployment_id + "/" + data_type
     files = []
     try:
-        async with session.client('s3',
-                                  aws_access_key_id=AWS_ACCESS_KEY_ID,
-                                  aws_secret_access_key=AWS_SECRET_ACCESS_KEY,
-                                  region_name=AWS_REGION,
-                                  endpoint_url=AWS_URL_ENDPOINT) as s3_client:
+        async with session.client('s3') as s3_client:
             paginator = s3_client.get_paginator('list_objects_v2')
             operation_parameters = {'Bucket': s3_bucket_name, 'Prefix': prefix}
 
@@ -305,11 +295,14 @@ async def count_data(
                 #     files.append(obj['Key'])
             return JSONResponse(status_code=200, content={"count": count})
     except NoCredentialsError:
-        return JSONResponse(status_code=403, content={"Credentials not available"})
+        return JSONResponse(
+            status_code=403, content={"message": "Credentials not available"})
     except PartialCredentialsError:
-        return JSONResponse(status_code=400, content={"Incomplete credentials"})
+        return JSONResponse(
+            status_code=400, content={"message": "Incomplete credentials"})
     except ClientError:
-        return JSONResponse(status_code=404, content={"The AWS Access Key Id does not exist in our records"})
+        return JSONResponse(
+            status_code=404, content={"message": "The AWS Access Key Id does not exist in our records"})
     except Exception as e:
         return JSONResponse(status_code=500, content={"message": str(e)})
 
@@ -329,20 +322,16 @@ async def create_bucket(bucket_name: str = Query("", description="Bucket are nam
                                                                  "Alpha-3 code, check this link: "
                                                                  "https://www.iban.com/country-codes. "
                                                                  "E.g. The United Kingdom would be gbr")):
-    async with session.client('s3',
-                              aws_access_key_id=AWS_ACCESS_KEY_ID,
-                              aws_secret_access_key=AWS_SECRET_ACCESS_KEY,
-                              region_name=AWS_REGION,
-                              endpoint_url=AWS_URL_ENDPOINT) as s3_client:
+    async with session.client('s3') as s3_client:
         try:
             await s3_client.create_bucket(Bucket=bucket_name, CreateBucketConfiguration={'LocationConstraint': AWS_REGION})
             return JSONResponse(status_code=200, content={"message": f"Bucket '{bucket_name}' created successfully"})
         except s3_client.exceptions.BucketAlreadyExists:
-            return JSONResponse(status_code=409, content={f"Bucket {bucket_name} already exists."})
+            return JSONResponse(status_code=409, content={"message": f"Bucket {bucket_name} already exists."})
         except s3_client.exceptions.BucketAlreadyOwnedByYou:
-            return JSONResponse(status_code=409, content={f"Bucket {bucket_name} is already owned by you."})
+            return JSONResponse(status_code=409, content={"message": f"Bucket {bucket_name} is already owned by you."})
         except Exception as e:
-            return JSONResponse(status_code=500, content={f"Error creating bucket: {str(e)}"})
+            return JSONResponse(status_code=500, content={"message": f"Error creating bucket: {str(e)}"})
 
 
 @app.post("/generate-presigned-url/", tags=["Data"])
@@ -357,11 +346,7 @@ async def generate_presigned_url(
     bucket_name = country.lower()
     key = f"{deployment}/{data_type}/{filename}"
 
-    s3 = boto3.client('s3',
-                      aws_access_key_id=AWS_ACCESS_KEY_ID,
-                      aws_secret_access_key=AWS_SECRET_ACCESS_KEY,
-                      region_name=AWS_REGION,
-                      endpoint_url=AWS_URL_ENDPOINT)
+    s3 = boto3.client('s3')
     try:
         # Generate a presigned URL for the S3
         presigned_url = s3.generate_presigned_url('put_object',
@@ -372,11 +357,11 @@ async def generate_presigned_url(
 
         return JSONResponse(status_code=200, content=presigned_url)
     except NoCredentialsError:
-        return JSONResponse(status_code=403, content={"error": "No AWS credentials found"})
+        return JSONResponse(status_code=403, content={"message":  "No AWS credentials found"})
     except PartialCredentialsError:
-        return JSONResponse(status_code=403, content={"error": "Incomplete AWS credentials"})
+        return JSONResponse(status_code=403, content={"message": "Incomplete AWS credentials"})
     except Exception as e:
-        return JSONResponse(status_code=500, content={"error": str(e)})
+        return JSONResponse(status_code=500, content={"message": str(e)})
 
 
 @app.post("/upload/", tags=["Data"])
@@ -408,11 +393,7 @@ async def upload(
 
 
 async def upload_file(s3_bucket_name, key, file, name):
-    async with session.client('s3',
-                              aws_access_key_id=AWS_ACCESS_KEY_ID,
-                              aws_secret_access_key=AWS_SECRET_ACCESS_KEY,
-                              region_name=AWS_REGION,
-                              endpoint_url=AWS_URL_ENDPOINT) as s3_client:
+    async with session.client('s3') as s3_client:
         try:
             # Upload updated file to S3
             await s3_client.upload_fileobj(file.file, s3_bucket_name, f"{key}/{file.filename}")
@@ -434,11 +415,7 @@ async def check_file_exist(
     bucket_name = country.lower()
     key = f"{deployment}/{data_type}/{filename}"
 
-    s3 = boto3.client('s3',
-                      aws_access_key_id=AWS_ACCESS_KEY_ID,
-                      aws_secret_access_key=AWS_SECRET_ACCESS_KEY,
-                      region_name=AWS_REGION,
-                      endpoint_url=AWS_URL_ENDPOINT)
+    s3 = boto3.client('s3')
 
     try:
         s3.head_object(Bucket=bucket_name, Key=key)

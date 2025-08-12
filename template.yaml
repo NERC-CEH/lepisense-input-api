@@ -9,7 +9,7 @@ Globals:
     Timeout: 3
 
 Resources:
-  LepiSenseFunction:
+  LepiSenseInput:
     Type: AWS::Serverless::Function # More info about Function Resource: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#awsserverlessfunction
     Properties:
       CodeUri: ./
@@ -28,6 +28,18 @@ Resources:
           Properties:
             Path: /{proxy+}
             Method: ANY
+    Connectors:
+      S3Connector:
+        Properties:
+          Destination: 
+            Id: LepiSenseBucket
+          Permissions:
+            - Read
+            - Write
+  LepiSenseBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: lepisense-images
 
 Outputs:
   # ServerlessRestApi is an implicit API created out of Events key under Serverless::Function
@@ -36,9 +48,12 @@ Outputs:
   LepiSenseApi:
     Description: "API Gateway endpoint URL for Prod stage for LepiSense function"
     Value: !Sub "https://${ServerlessRestApi}.execute-api.${AWS::Region}.amazonaws.com/Prod/"
-  LepiSenseFunction:
+  LepiSenseInput:
     Description: "LepiSense Lambda Function ARN"
-    Value: !GetAtt LepiSenseFunction.Arn
-  LepiSenseFunctionIamRole:
+    Value: !GetAtt LepiSenseInput.Arn
+  LepiSenseInputIamRole:
     Description: "Implicit IAM Role created for LepiSense function"
-    Value: !GetAtt LepiSenseFunctionRole.Arn
+    Value: !GetAtt LepiSenseInputRole.Arn
+  LepiSenseBucket:
+    Description: "S3 bucket name"
+    Value: !Ref LepiSenseBucket
