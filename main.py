@@ -43,8 +43,8 @@ tags_metadata = [
 ]
 
 app = FastAPI(
-    title="AMI Data Management API",
-    version="1.0.1",
+    title="LepiSense Input API",
+    version="0.0.1",
     contact={
         "name": "AMI system team at UKCEH",
         "url": "https://www.ceh.ac.uk/solutions/equipment/automated-monitoring-insects-trap",
@@ -54,7 +54,8 @@ app = FastAPI(
         "name": "Apache 2.0",
         "identifier": "MIT",
     },
-    openapi_tags=tags_metadata
+    openapi_tags=tags_metadata,
+    root_path="/" + os.getenv("EnvironmentType", "")
 )
 
 handler = Mangum(app, lifespan="off")
@@ -140,7 +141,8 @@ class NewDeployment(BaseModel):
 
 @app.get("/", include_in_schema=False)
 async def main():
-    return RedirectResponse(url="/docs")  # docs
+    return RedirectResponse(
+        url="/" + os.getenv("EnvironmentType", "") + "/docs")
 
 
 @app.get("/get-deployments/", tags=["Deployments"])
@@ -240,7 +242,7 @@ async def list_data(
     country, location_name = country_location_name.split(" - ")
     country_code = [d['country_code']
                     for d in deployments_info if d['country'] == country][0]
-    s3_bucket_name = 'lepisense-images'
+    s3_bucket_name = 'lepisense-images-' + os.getenv("EnvironmentType", "")
     deployment_id = [d['deployment_id'] for d in deployments_info if d['country'] == country
                      and d['location_name'] == location_name][0]
     prefix = deployment_id + "/" + data_type
@@ -276,7 +278,7 @@ async def count_data(
     country, location_name = country_location_name.split(" - ")
     country_code = [d['country_code']
                     for d in deployments_info if d['country'] == country][0]
-    s3_bucket_name = country_code.lower()
+    s3_bucket_name = 'lepisense-images-' + os.getenv("EnvironmentType", "")
     deployment_id = [d['deployment_id'] for d in deployments_info if d['country'] == country
                      and d['location_name'] == location_name][0]
     prefix = deployment_id + "/" + data_type
@@ -373,7 +375,7 @@ async def upload(
         files: List[UploadFile] = File(...)
 ):
     start_time = perf_counter()
-    s3_bucket_name = country.lower()
+    s3_bucket_name = 'lepisense-images-' + os.getenv("EnvironmentType", "")
     key = f"{deployment}/{data_type}"
 
     try:

@@ -1,0 +1,37 @@
+version = 0.1
+
+[dev.deploy.parameters]
+stack_name = "input-api"
+resolve_s3 = false
+s3_bucket = "lepisense-lambda"
+s3_prefix = "input-api-dev"
+region = "eu-west-2"
+confirm_changeset = true
+capabilities = "CAPABILITY_IAM"
+disable_rollback = true
+parameter_overrides = "EnvironmentType=\"dev\""
+image_repositories = []
+
+[staging.deploy.parameters]
+stack_name = "input-api"
+resolve_s3 = false
+s3_bucket = "lepisense-lambda"
+s3_prefix = "input-api-staging"
+region = "eu-west-2"
+confirm_changeset = true
+capabilities = "CAPABILITY_IAM"
+disable_rollback = true
+parameter_overrides = "EnvironmentType=\"staging\""
+image_repositories = []
+
+[prod.deploy.parameters]
+stack_name = "input-api"
+resolve_s3 = false
+s3_bucket = "lepisense-lambda"
+s3_prefix = "input-api-prod"
+region = "eu-west-2"
+confirm_changeset = true
+capabilities = "CAPABILITY_IAM"
+disable_rollback = true
+parameter_overrides = "EnvironmentType=\"prod\""
+image_repositories = []

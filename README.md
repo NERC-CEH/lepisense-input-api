@@ -56,9 +56,6 @@ curl http://localhost:3000/
 
 ## Deployment
 
-To be able to deploy to AWS you need to be suitably authenticated. To do this
-I created a profile with admin permissions using the following command:
-
 To be able to deploy to AWS you need to be suitably authenticated. You can do
 this using the [AWS Command Line
 Inerface](https://docs.aws.amazon.com/cli/latest/userguide/cli-chap-welcome.html)
@@ -70,7 +67,8 @@ to your AWS account. If it is the first time you will want to
 aws configure sso
 ```
 
-otherwise it is 
+otherwise it is as follows, where you substitute `<your-profile-name>` with the
+value you chose during the previous configuration.
 
 ```bash
 aws sso login --profile <your-profile-name>
@@ -80,12 +78,12 @@ To build and deploy your application, run the following in your shell:
 
 ```bash
 sam build --use-container
-sam deploy --profile <your-profile-name>
+sam deploy --profile <your-profile-name> --config-env <dev|staging|prod>
 ```
 
 The first command will build the source of your application. The second command
-will package and deploy your application to AWS.
-
+will package and deploy your application to AWS. Replace `<dev|staging|prod>`
+with one of the three values according to the stage of deployment.
 
 You can find your API Gateway Endpoint URL in the output values displayed after
 deployment.
