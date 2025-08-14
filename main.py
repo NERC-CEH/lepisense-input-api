@@ -1,18 +1,16 @@
 from typing import List
 from time import perf_counter
 import csv
-import json
 import asyncio
 import os
 import logging
 
-from fastapi import FastAPI, Form, File, UploadFile, Request, Query
-from fastapi.responses import HTMLResponse, JSONResponse, PlainTextResponse, RedirectResponse
+from fastapi import FastAPI, Form, File, UploadFile, Query
+from fastapi.responses import JSONResponse, PlainTextResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 
 from pydantic import BaseModel, Field
-from botocore.exceptions import NoCredentialsError, PartialCredentialsError, ClientError
 import aioboto3
 import boto3
 from mangum import Mangum
@@ -60,21 +58,6 @@ app = FastAPI(
 
 handler = Mangum(app, lifespan="off")
 
-# Set up CORS middleware
-origins = [
-    "http://localhost",
-    "http://localhost:8080",
-    "http://127.0.0.1",
-    "http://127.0.0.1:8080",
-    "https://connect-apps.ceh.ac.uk/ami-data-upload/"
-]
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=origins,
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
 # Mount the static directory to serve static files
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
@@ -255,15 +238,6 @@ async def list_data(
                 for obj in page.get('Contents', []):
                     files.append(obj['Key'])
             return JSONResponse(status_code=200, content={"files": files})
-    except NoCredentialsError:
-        return JSONResponse(
-            status_code=403, content={"message": "Credentials not available"})
-    except PartialCredentialsError:
-        return JSONResponse(
-            status_code=400, content={"message": "Incomplete credentials"})
-    except ClientError:
-        return JSONResponse(
-            status_code=404, content={"message": "The AWS Access Key Id does not exist in our records"})
     except Exception as e:
         return JSONResponse(
             status_code=500, content={"message": str(e)})
@@ -282,29 +256,15 @@ async def count_data(
     deployment_id = [d['deployment_id'] for d in deployments_info if d['country'] == country
                      and d['location_name'] == location_name][0]
     prefix = deployment_id + "/" + data_type
-    files = []
     try:
         async with session.client('s3') as s3_client:
             paginator = s3_client.get_paginator('list_objects_v2')
             operation_parameters = {'Bucket': s3_bucket_name, 'Prefix': prefix}
 
             count = 0
-
             async for page in paginator.paginate(**operation_parameters):
-
                 count += page["KeyCount"]
-                # for obj in page.get('Contents', []):
-                #     files.append(obj['Key'])
             return JSONResponse(status_code=200, content={"count": count})
-    except NoCredentialsError:
-        return JSONResponse(
-            status_code=403, content={"message": "Credentials not available"})
-    except PartialCredentialsError:
-        return JSONResponse(
-            status_code=400, content={"message": "Incomplete credentials"})
-    except ClientError:
-        return JSONResponse(
-            status_code=404, content={"message": "The AWS Access Key Id does not exist in our records"})
     except Exception as e:
         return JSONResponse(status_code=500, content={"message": str(e)})
 
@@ -317,23 +277,6 @@ async def get_logs():
         return PlainTextResponse(log_content)
     except Exception as e:
         return JSONResponse(status_code=500, content=f"Error reading log file: {e}")
-
-
-@app.post("/create-bucket/", tags=["Other"])
-async def create_bucket(bucket_name: str = Query("", description="Bucket are named based on countries "
-                                                                 "Alpha-3 code, check this link: "
-                                                                 "https://www.iban.com/country-codes. "
-                                                                 "E.g. The United Kingdom would be gbr")):
-    async with session.client('s3') as s3_client:
-        try:
-            await s3_client.create_bucket(Bucket=bucket_name, CreateBucketConfiguration={'LocationConstraint': AWS_REGION})
-            return JSONResponse(status_code=200, content={"message": f"Bucket '{bucket_name}' created successfully"})
-        except s3_client.exceptions.BucketAlreadyExists:
-            return JSONResponse(status_code=409, content={"message": f"Bucket {bucket_name} already exists."})
-        except s3_client.exceptions.BucketAlreadyOwnedByYou:
-            return JSONResponse(status_code=409, content={"message": f"Bucket {bucket_name} is already owned by you."})
-        except Exception as e:
-            return JSONResponse(status_code=500, content={"message": f"Error creating bucket: {str(e)}"})
 
 
 @app.post("/generate-presigned-url/", tags=["Data"])
@@ -358,10 +301,6 @@ async def generate_presigned_url(
                                                   ExpiresIn=3600)  # URL expires in 1 hour
 
         return JSONResponse(status_code=200, content=presigned_url)
-    except NoCredentialsError:
-        return JSONResponse(status_code=403, content={"message":  "No AWS credentials found"})
-    except PartialCredentialsError:
-        return JSONResponse(status_code=403, content={"message": "Incomplete AWS credentials"})
     except Exception as e:
         return JSONResponse(status_code=500, content={"message": str(e)})
 
@@ -428,10 +367,6 @@ async def check_file_exist(
             message = {"exists": False}  # File doesn't exist
             return JSONResponse(status_code=200, content=message)
         return JSONResponse(status_code=500, content={"message": f"{e}"})
-    except NoCredentialsError:
-        return JSONResponse(status_code=403, content={"message": "No AWS credentials found"})
-    except PartialCredentialsError:
-        return JSONResponse(status_code=403, content={"message": "Incomplete AWS credentials"})
     except Exception as e:
         return JSONResponse(status_code=500, content={"message": f"{e}"})
 
