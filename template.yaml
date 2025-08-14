@@ -22,6 +22,7 @@ Resources:
     Properties:
       CodeUri: ./
       Handler: main.handler
+      Timeout: 30
       Environment:
         Variables:
           EnvironmentType: !Ref EnvironmentType
