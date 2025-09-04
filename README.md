@@ -17,7 +17,7 @@ deployment process that updates your application code.
 
 ## Development
 
-[VS Code with the AWS
+VS Code with the [AWS
 Toolkit](https://docs.aws.amazon.com/toolkit-for-vscode/latest/userguide/welcome.html)
 extension has been used to develop the code. The AWS Toolkit uses the SAM CLI to
 build and deploy serverless applications on AWS. The AWS Toolkit also adds local
@@ -50,9 +50,45 @@ curl http://localhost:3000/
 5. **Add `deployments_info.csv`:**
    Add the file named `deployments_info.csv` with the information about your AMI deployments.
    
+## Database Setup
+
+The Relational Database Service (RDS) has been chosen to provide a managed
+PostgreSQL instance for data storage. Using a managed service reduces our
+maintenance burden. Postgres offers flexibility and familiarity.
+
+For initial development, a PostgreSQL database has been created using the
+[RDS Console](console.aws.amazon.com/rds/home).
+
+For the Lambda function to use the standard Python psycopg module for accessing
+the database it has to be installed with the appropriate client libraries as 
+they are not included in the operating system. For development,this has been
+achieved by adding options in the requirements.txt
+
+For the Lambda function to be able to connect to the database it has to attach
+to the same Virtual Private Cloud (VPC) that hosts the database. As well as
+specifying the VPC, subnets, and security group to use, permission has to be
+given to allow Lambda to make the connection. This has been arranged in the SAM
+template.yaml but it hard-codes VPC, subnet and security group values which
+would be different in another installation. See
+https://docs.aws.amazon.com/lambda/latest/dg/configuration-vpc.html
+Broader use of CloudFormation or Terraform would help solve this. 
+
+In the [Lambda Console](console.aws.amazon.com/lambda/home), add the following
+environment variables using values obtatined from the RDS console.
+
+POSTGRES_HOST: lepisense.c14qc2uwid2u.eu-west-2.rds.amazonaws.com
+POSTGRES_PORT: 5432
+POSTGRES_USER: postgres
+POSTGRES_PASSWORD: your password
+POSTGRES_DB: lepisense
 
 
+## Storage Setup
 
+The Simple Storage Service (S3) is used for storing images sent to this API.
+
+A storage bucket has been created with the 
+[S3 Console](console.aws.amazon.com/s3/home)
 
 ## Deployment
 

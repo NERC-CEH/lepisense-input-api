@@ -1,68 +1,23 @@
-from typing import List
+from app.api.routes.organisation import router as organisation_router
+from app.api.routes.country import router as country_router
+from app.api.routes.network import router as network_router
+from app.api.routes.devicetype import router as devicetype_router
+from app.api.routes.deployment import router as deployment_router
+
 from time import perf_counter
-import csv
-import asyncio
-import os
-import logging
-
-from fastapi import FastAPI, Form, File, UploadFile, Query
+import boto3
+from fastapi import Form, File, UploadFile, Query, APIRouter, Request
 from fastapi.responses import JSONResponse, PlainTextResponse, RedirectResponse
-from fastapi.staticfiles import StaticFiles
-from fastapi.middleware.cors import CORSMiddleware
-
 from pydantic import BaseModel, Field
 import aioboto3
-import boto3
-from mangum import Mangum
-
-
-# Configure logging
-logging.basicConfig(
-    filename='upload_logs.log',  # Log file path on the server
-    level=logging.INFO,          # Log level
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-)
+import csv
+from typing import Annotated, List
+import os
+import logging
+from sqlmodel import SQLModel
+import asyncio
 
 logger = logging.getLogger(__name__)
-
-tags_metadata = [
-    {
-        "name": "Data",
-        "description": "Operations for data management in the server, uploading and downloading."
-    },
-    {
-        "name": "Deployments",
-        "description": "Operations with deployments."
-    },
-    {
-        "name": "Other",
-        "description": "Other operations."
-    }
-]
-
-app = FastAPI(
-    title="LepiSense Input API",
-    version="0.0.1",
-    contact={
-        "name": "AMI system team at UKCEH",
-        "url": "https://www.ceh.ac.uk/solutions/equipment/automated-monitoring-insects-trap",
-        "email": "ami-system@ceh.ac.uk",
-    },
-    license_info={
-        "name": "Apache 2.0",
-        "identifier": "MIT",
-    },
-    openapi_tags=tags_metadata,
-    root_path="/" + os.getenv("EnvironmentType", "")
-)
-
-handler = Mangum(app, lifespan="off")
-
-# Mount the static directory to serve static files
-app.mount("/static", StaticFiles(directory="static"), name="static")
-
-
-CONCURRENCY_LIMIT = 200  # Adjust this value based on your server capabilities
 
 session = aioboto3.Session()
 
@@ -115,20 +70,29 @@ class NewDeployment(BaseModel):
     status: str = Field(default="inactive")
 
 
-# @app.get("/", response_class=HTMLResponse, include_in_schema=False)
-# async def main():
-#     with open("templates/upload.html") as f:
-#         html_content = f.read()
-#     return HTMLResponse(content=html_content)
+# Instantiate a router.
+router = APIRouter()
+router.include_router(organisation_router)
+router.include_router(country_router)
+router.include_router(network_router)
+router.include_router(devicetype_router)
+router.include_router(deployment_router)
 
 
-@app.get("/", include_in_schema=False)
+@router.get("/", include_in_schema=False)
 async def main():
     return RedirectResponse(
-        url="/" + os.getenv("EnvironmentType", "") + "/docs")
+        url="/" + os.getenv("Environment", "") + "/docs")
 
 
-@app.get("/get-deployments/", tags=["Deployments"])
+@router.get("/reset")
+async def reset(request: Request):
+    engine = request.app.state.engine
+    SQLModel.metadata.drop_all(engine)
+    return {"ok": True}
+
+
+@router.get("/get-deployments/", tags=["Deployments"])
 async def get_deployments():
     return JSONResponse(content=deployments_info)
 
@@ -149,7 +113,7 @@ def increment_id(data, current_id):
     return highest_id
 
 
-@app.post("/create-deployment/", tags=["Deployments"])
+@router.post("/create-deployment/", tags=["Deployments"])
 async def create_deployment(new_deployment: NewDeployment):
     try:
         global deployments_info
@@ -184,7 +148,7 @@ async def create_deployment(new_deployment: NewDeployment):
         return JSONResponse(status_code=500, content={"message": str(e)})
 
 
-@app.put("/update-deployment/", tags=["Deployments"])
+@router.put("/update-deployment/", tags=["Deployments"])
 async def update_deployment(deployment: Deployment):
     try:
         # Reload deployments info
@@ -213,7 +177,7 @@ async def update_deployment(deployment: Deployment):
         return JSONResponse(status_code=500, content={"message": str(e)})
 
 
-@app.get("/list-data/", tags=["Other"])
+@router.get("/list-data/", tags=["Other"])
 async def list_data(
         country_location_name: str = Query(
             "",
@@ -225,7 +189,7 @@ async def list_data(
     country, location_name = country_location_name.split(" - ")
     country_code = [d['country_code']
                     for d in deployments_info if d['country'] == country][0]
-    s3_bucket_name = 'lepisense-images-' + os.getenv("EnvironmentType", "")
+    s3_bucket_name = 'lepisense-images-' + os.getenv("Environment", "")
     deployment_id = [d['deployment_id'] for d in deployments_info if d['country'] == country
                      and d['location_name'] == location_name][0]
     prefix = deployment_id + "/" + data_type
@@ -243,7 +207,7 @@ async def list_data(
             status_code=500, content={"message": str(e)})
 
 
-@app.get("/count-data/", tags=["Other"])
+@router.get("/count-data/", tags=["Other"])
 async def count_data(
         country_location_name: str = Query("", enum=sorted(list(valid_countries_location_names)),
                                            description="Country and location names."),
@@ -252,7 +216,7 @@ async def count_data(
     country, location_name = country_location_name.split(" - ")
     country_code = [d['country_code']
                     for d in deployments_info if d['country'] == country][0]
-    s3_bucket_name = 'lepisense-images-' + os.getenv("EnvironmentType", "")
+    s3_bucket_name = 'lepisense-images-' + os.getenv("Environment", "")
     deployment_id = [d['deployment_id'] for d in deployments_info if d['country'] == country
                      and d['location_name'] == location_name][0]
     prefix = deployment_id + "/" + data_type
@@ -269,7 +233,7 @@ async def count_data(
         return JSONResponse(status_code=500, content={"message": str(e)})
 
 
-@app.get("/logs/", tags=["Other"])
+@router.get("/logs/", tags=["Other"])
 async def get_logs():
     try:
         with open('upload_logs.log', 'r') as log_file:
@@ -279,7 +243,7 @@ async def get_logs():
         return JSONResponse(status_code=500, content=f"Error reading log file: {e}")
 
 
-@app.post("/generate-presigned-url/", tags=["Data"])
+@router.post("/generate-presigned-url/", tags=["Data"])
 async def generate_presigned_url(
     name: str = Form(...),
     country: str = Form(...),
@@ -305,16 +269,16 @@ async def generate_presigned_url(
         return JSONResponse(status_code=500, content={"message": str(e)})
 
 
-@app.post("/upload/", tags=["Data"])
+@router.post("/upload/", tags=["Data"])
 async def upload(
-        name: str = Form(...),
-        country: str = Form(...),
-        deployment: str = Form(...),
+        name: Annotated[str, Form(description="User name")],
+        organisation: Annotated[int, Form(description="Organisation id.")],
+        deployment: Annotated[int, Form(description="Deployment id.")],
         data_type: str = Form(...),
         files: List[UploadFile] = File(...)
 ):
     start_time = perf_counter()
-    s3_bucket_name = 'lepisense-images-' + os.getenv("EnvironmentType", "")
+    s3_bucket_name = 'lepisense-images-' + os.getenv("Environment", "")
     key = f"{deployment}/{data_type}"
 
     try:
@@ -345,7 +309,7 @@ async def upload_file(s3_bucket_name, key, file, name):
             return JSONResponse(status_code=500, content={"message": f"Error uploading {key}/{file.filename}: {e}"})
 
 
-@app.post("/check-file-exist/", tags=["Data"])
+@router.post("/check-file-exist/", tags=["Data"])
 async def check_file_exist(
     name: str = Form(...),
     country: str = Form(...),
@@ -369,7 +333,3 @@ async def check_file_exist(
         return JSONResponse(status_code=500, content={"message": f"{e}"})
     except Exception as e:
         return JSONResponse(status_code=500, content={"message": f"{e}"})
-
-if __name__ == "__main__":
-    import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8080)

@@ -1,6 +1,6 @@
 AWSTemplateFormatVersion: '2010-09-09'
 Transform: AWS::Serverless-2016-10-31
-Description: >
+Description: |
   LepiSense Input API
 Parameters:
   EnvironmentType:
@@ -21,14 +21,23 @@ Resources:
     Type: AWS::Serverless::Function # More info about Function Resource: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#awsserverlessfunction
     Properties:
       CodeUri: ./
-      Handler: main.handler
+      Handler: app.main.handler
       Timeout: 30
       Environment:
         Variables:
-          EnvironmentType: !Ref EnvironmentType
+          ENVIRONMENT: !Ref EnvironmentType
       Runtime: python3.13
       Architectures:
         - x86_64
+      VpcConfig:
+        SubnetIds:
+          - subnet-0a1091fd903f56cf0
+          - subnet-02e117d39e4f1dcbc
+          - subnet-0dbc7dc19923592ff
+        SecurityGroupIds:
+          - sg-0cd6ca43983d5b545
+      Policies: 
+        - AWSLambdaVPCAccessExecutionRole
       Events:
         Root:
           Type: Api # More info about API Event Source: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#api
@@ -45,14 +54,22 @@ Resources:
     Connectors:
       S3Connector:
         Properties:
-          Destination: 
+          Destination:
             Id: LepiSenseBucket
           Permissions:
             - Read
             - Write
-  
+
+  LepiSenseSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Security group for Lambda function.
+      VpcId: vpc-05f0cabdcea9b6c3b
+
   LepiSenseBucket:
     Type: AWS::S3::Bucket
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
     Properties:
       BucketName: !Sub lepisense-images-${EnvironmentType}
 
@@ -61,14 +78,14 @@ Outputs:
   # Find out more about other implicit resources you can reference within SAM
   # https://github.com/awslabs/serverless-application-model/blob/master/docs/internals/generated_resources.rst#api
   LepiSenseInputApi:
-    Description: "API Gateway endpoint URL for Prod stage for LepiSense function"
-    Value: !Sub "https://${LepiSenseInputApi}.execute-api.${AWS::Region}.amazonaws.com/${EnvironmentType}/"
+    Description: API Gateway endpoint URL for Prod stage for LepiSense function
+    Value: !Sub https://${LepiSenseInputApi}.execute-api.${AWS::Region}.amazonaws.com/${EnvironmentType}/
   LepiSenseInputLambda:
-    Description: "LepiSense Lambda Function ARN"
+    Description: LepiSense Lambda Function ARN
     Value: !GetAtt LepiSenseInputLambda.Arn
   LepiSenseInputIamRole:
-    Description: "Implicit IAM Role created for LepiSense function"
+    Description: Implicit IAM Role created for LepiSense function
     Value: !GetAtt LepiSenseInputLambdaRole.Arn
   LepiSenseBucket:
-    Description: "S3 bucket name"
+    Description: S3 bucket name
     Value: !Ref LepiSenseBucket

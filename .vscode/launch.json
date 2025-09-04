@@ -11,7 +11,7 @@
                 "logicalId": "LepiSenseInput"
             },
             "api": {
-                "path": "/",
+                "path": "/list-data/?country_location_name=UK%20-%20Lancaster&data_type=snapshot_images",
                 "httpMethod": "get",
                 "payload": {
                     "json": {}

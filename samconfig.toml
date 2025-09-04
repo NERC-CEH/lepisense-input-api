@@ -12,7 +12,7 @@ disable_rollback = true
 parameter_overrides = "EnvironmentType=\"dev\""
 image_repositories = []
 
-[staging.deploy.parameters]
+[test.deploy.parameters]
 stack_name = "input-api"
 resolve_s3 = false
 s3_bucket = "lepisense-lambda"
@@ -21,7 +21,7 @@ region = "eu-west-2"
 confirm_changeset = true
 capabilities = "CAPABILITY_IAM"
 disable_rollback = true
-parameter_overrides = "EnvironmentType=\"staging\""
+parameter_overrides = "EnvironmentType=\"test\""
 image_repositories = []
 
 [prod.deploy.parameters]

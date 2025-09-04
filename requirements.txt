@@ -2,4 +2,18 @@ aioboto3
 boto3
 fastapi
 mangum
+# A quick fix for getting psycopg2 to run on AWS Lambda.
+# May want an alternative for production.
+# See 
+# https://subaud.io/blog/using-psycopg2-with-aws-lambda-and-cdk
+# https://docs.aws.amazon.com/prescriptive-guidance/latest/patterns/import-psycopg2-library-lambda.html
+# https://aws.amazon.com/blogs/compute/using-container-image-support-for-aws-lambda-with-aws-sam/
+psycopg2-binary \
+  --config-settings="platform=manylinux2014_x86_64" \
+  --config-settings="target=." \
+  --config-settings="python-version=3.13" \
+  --config-setting="only-binary=:all:"
+pydantic-settings
 python-multipart
+sqlmodel
+
