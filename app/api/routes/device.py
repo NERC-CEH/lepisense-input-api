@@ -1,22 +1,23 @@
 from fastapi import APIRouter, HTTPException, status
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from sqlmodel import Session, select
+from typing import Optional
 
 from app.database import DbDependency
 from app.sqlmodels import Device, DeploymentDevice
-from app.api.routes.network import network_exists
+from app.api.routes.deployment import deployment_exists
 from app.api.routes.devicetype import devicetype_exists
 
 router = APIRouter(prefix="/device", tags=["Device"])
 
 
 class DeviceBase(BaseModel):
-    network_id: int
-    devicetype_name: str
-    name: str
-    latitude: float
-    longitude: float
-    active: bool
+    uid: str = Field(description="Unique device id.")
+    name: Optional[str] = Field(description="An optional device name.")
+    devicetype_name: str = Field(
+        description="A name from the device type table")
+    version: str
+    current_deployment_id: Optional[int] = None
 
 
 class DeviceFull(DeviceBase):
@@ -30,16 +31,17 @@ class DeviceFull(DeviceBase):
 )
 async def get_devices(
     db: DbDependency,
-    device_id: int = None,
+    devicetype_name: str = None,
+    deleted: bool = False,
     offset: int = 0,
     limit: int = 100
 ):
     sql = (select(Device).
-           where(Device.deleted == False).
+           where(Device.deleted == deleted).
            limit(limit).
            offset(offset))
-    if device_id:
-        sql = sql.where(Device.device_id == device_id)
+    if devicetype_name:
+        sql = sql.where(Device.devicetype_name == devicetype_name)
 
     devices = db.exec(sql).all()
     return devices
@@ -60,28 +62,18 @@ async def get_device(db: DbDependency, id: int):
 async def create_device(
     db: DbDependency, body: DeviceBase
 ):
-    if not network_exists(db, body.network_id):
+    check_valid_device(db, body)
+    try:
+        body.devicetype_name = body.devicetype_name.lower()
+        new_device = Device.model_validate(body)
+        db.add(new_device)
+        db.commit()
+        db.refresh(new_device)
+    except Exception as e:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Network {body.network_id} not found."
-        )
-    if not devicetype_exists(db, body.devicetype_name):
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Device type {body.devicetype_name} not found."
-        )
-    if not device_exists(db, body):
-        try:
-            body.devicetype_name = body.organisation_name.lower()
-            new_device = Device.model_validate(body)
-            db.add(new_device)
-            db.commit()
-            db.refresh(new_device)
-            return new_device
-        except Exception as e:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Failed to create device: {e.args[0]}")
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Failed to create device: {e.args[0]}")
+    return new_device
 
 
 @router.put(
@@ -92,13 +84,10 @@ async def create_device(
 async def update_device(
     db: DbDependency, id: int, body: DeviceBase
 ):
-    if not devicetype_exists(db, body.devicetype_name):
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Device type {body.devicetype_name} not found."
-        )
+    check_valid_device(db, body)
     current_device = get_device_by_id(db, id)
     try:
+        body.devicetype_name = body.devicetype_name.lower()
         revised_device = body.model_dump(exclude_unset=True)
         current_device.sqlmodel_update(revised_device)
         db.add(current_device)
@@ -118,9 +107,14 @@ async def delete_device(db: DbDependency, id: int):
             status_code=status.HTTP_409_CONFLICT,
             detail=f"Device {id} is in use and cannot be deleted.")
     device = get_device_by_id(db, id)
-    device.deleted = True
-    db.add(device)
-    db.commit()
+    try:
+        device.deleted = True
+        db.add(device)
+        db.commit()
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Failed to delete device: {e.args[0]}")
     return {"ok": True}
 
 
@@ -131,10 +125,16 @@ async def delete_device(db: DbDependency, id: int):
 )
 async def undelete_device(db: DbDependency, name: str):
     device = get_device_by_id(db, name, True)
-    device.deleted = False
-    db.add(device)
-    db.commit()
-    db.refresh(device)
+    check_valid_device(db, device)
+    try:
+        device.deleted = False
+        db.add(device)
+        db.commit()
+        db.refresh(device)
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Failed to undelete device: {e.args[0]}")
     return device
 
 
@@ -173,3 +173,18 @@ def device_used(db: Session, id: int):
         where(DeploymentDevice.deleted == False)
     ).first()
     return True if deployment_devices else False
+
+
+def check_valid_device(db: Session, device: DeviceBase):
+    # Check foreign key validity. Current deployment is optional.
+    if (device.current_deployment_id and
+            not deployment_exists(db, device.current_deployment_id)):
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Deployment {device.current_deployment_id} not found."
+        )
+    if not devicetype_exists(db, device.devicetype_name):
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Device type {device.devicetype_name} not found."
+        )

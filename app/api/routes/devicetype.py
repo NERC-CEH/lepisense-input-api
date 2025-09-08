@@ -22,11 +22,11 @@ class DeviceTypeFull(DeviceTypeBase):
     response_model=list[DeviceTypeFull]
 )
 async def get_devicetypes(
-    db: DbDependency, offset: int = 0, limit: int = 100
+    db: DbDependency, deleted: bool = False, offset: int = 0, limit: int = 100
 ):
     devicetypes = db.exec(
         select(DeviceType).
-        where(DeviceType.deleted == False).
+        where(DeviceType.deleted == deleted).
         limit(limit).
         offset(offset)
     ).all()
@@ -95,9 +95,14 @@ async def delete_devicetype(db: DbDependency, name: str):
             status_code=status.HTTP_409_CONFLICT,
             detail=f"DeviceType {name} is in use and cannot be deleted.")
     devicetype = get_devicetype_by_name(db, name)
-    devicetype.deleted = True
-    db.add(devicetype)
-    db.commit()
+    try:
+        devicetype.deleted = True
+        db.add(devicetype)
+        db.commit()
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Failed to delete device type: {e.args[0]}")
     return {"ok": True}
 
 
@@ -108,10 +113,15 @@ async def delete_devicetype(db: DbDependency, name: str):
 )
 async def undelete_devicetype(db: DbDependency, name: str):
     devicetype = get_devicetype_by_name(db, name, True)
-    devicetype.deleted = False
-    db.add(devicetype)
-    db.commit()
-    db.refresh(devicetype)
+    try:
+        devicetype.deleted = False
+        db.add(devicetype)
+        db.commit()
+        db.refresh(devicetype)
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Failed to undelete device type: {e.args[0]}")
     return devicetype
 
 

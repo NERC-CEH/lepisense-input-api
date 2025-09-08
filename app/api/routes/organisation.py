@@ -1,5 +1,5 @@
 from fastapi import APIRouter, HTTPException, status
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from sqlmodel import Session, select
 
 from app.database import DbDependency
@@ -9,11 +9,11 @@ router = APIRouter(prefix="/organisation", tags=["Organisation"])
 
 
 class OrganisationBase(BaseModel):
-    full_name: str
+    full_name: str = Field(description="The full name of the organisation.")
 
 
 class OrganisationFull(OrganisationBase):
-    name: str
+    name: str = Field(description="A short, unique, organisation name.")
 
 
 @router.get(
@@ -22,11 +22,14 @@ class OrganisationFull(OrganisationBase):
     response_model=list[OrganisationFull]
 )
 async def get_organisations(
-    db: DbDependency, offset: int = 0, limit: int = 100
+    db: DbDependency,
+    deleted: bool = False,
+    offset: int = 0,
+    limit: int = 100
 ):
     organisations = db.exec(
         select(Organisation).
-        where(Organisation.deleted == False).
+        where(Organisation.deleted == deleted).
         limit(limit).
         offset(offset)
     ).all()
@@ -95,9 +98,14 @@ async def delete_organisation(db: DbDependency, name: str):
             status_code=status.HTTP_409_CONFLICT,
             detail=f"Organisation {name} is in use and cannot be deleted.")
     organisation = get_organisation_by_name(db, name)
-    organisation.deleted = True
-    db.add(organisation)
-    db.commit()
+    try:
+        organisation.deleted = True
+        db.add(organisation)
+        db.commit()
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Failed to delete organisation: {e.args[0]}")
     return {"ok": True}
 
 
@@ -108,10 +116,15 @@ async def delete_organisation(db: DbDependency, name: str):
 )
 async def undelete_organisation(db: DbDependency, name: str):
     organisation = get_organisation_by_name(db, name, True)
-    organisation.deleted = False
-    db.add(organisation)
-    db.commit()
-    db.refresh(organisation)
+    try:
+        organisation.deleted = False
+        db.add(organisation)
+        db.commit()
+        db.refresh(organisation)
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Failed to undelete organisation: {e.args[0]}")
     return organisation
 
 

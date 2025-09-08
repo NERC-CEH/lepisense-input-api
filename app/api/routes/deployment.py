@@ -30,16 +30,17 @@ class DeploymentFull(DeploymentBase):
 )
 async def get_deployments(
     db: DbDependency,
-    deployment_id: int = None,
+    network_id: int = None,
+    deleted: bool = False,
     offset: int = 0,
     limit: int = 100
 ):
     sql = (select(Deployment).
-           where(Deployment.deleted == False).
+           where(Deployment.deleted == deleted).
            limit(limit).
            offset(offset))
-    if deployment_id:
-        sql = sql.where(Deployment.deployment_id == deployment_id)
+    if network_id:
+        sql = sql.where(Deployment.network_id == network_id)
 
     deployments = db.exec(sql).all()
     return deployments
@@ -60,25 +61,7 @@ async def get_deployment(db: DbDependency, id: int):
 async def create_deployment(
     db: DbDependency, body: DeploymentBase
 ):
-    # Check foreign key validity
-    if not network_exists(db, body.network_id):
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Network {body.network_id} not found."
-        )
-    if not devicetype_exists(db, body.devicetype_name):
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Device type {body.devicetype_name} not found."
-        )
-    # Maintain unique deployment names for a netwokr and devicetype.
-    if deployment_name_exists(
-            db, body.network_id, body.devicetype_name, body.name):
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail=(f"Deployment {body.name} already exists for "
-                    f"{body.devicetype_name} in network {body.network_id}."))
-
+    check_valid_deployment(db, body)
     try:
         body.devicetype_name = body.devicetype_name.lower()
         new_deployment = Deployment.model_validate(body)
@@ -100,29 +83,8 @@ async def create_deployment(
 async def update_deployment(
     db: DbDependency, id: int, body: DeploymentBase
 ):
-    # Check foreign key validity
-    if not network_exists(db, body.network_id):
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Network {body.network_id} not found."
-        )
-    if not devicetype_exists(db, body.devicetype_name):
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Device type {body.devicetype_name} not found."
-        )
+    check_valid_deployment(db, body, id)
     current_deployment = get_deployment_by_id(db, id)
-    # Maintain unique deployment names for a network and devicetype.
-    if (current_deployment.network_id != body.network_id or
-        current_deployment.devicetype_name != body.devicetype_name or
-            current_deployment.name != body.name):
-        if deployment_name_exists(
-                db, body.network_id, body.devicetype_name, body.name):
-            raise HTTPException(
-                status_code=status.HTTP_409_CONFLICT,
-                detail=(f"Deployment {body.name} already exists for "
-                        f"{body.devicetype_name} in network {body.network_id}."))
-
     try:
         body.devicetype_name = body.devicetype_name.lower()
         revised_deployment = body.model_dump(exclude_unset=True)
@@ -144,9 +106,14 @@ async def delete_deployment(db: DbDependency, id: int):
             status_code=status.HTTP_409_CONFLICT,
             detail=f"Deployment {id} is in use and cannot be deleted.")
     deployment = get_deployment_by_id(db, id)
-    deployment.deleted = True
-    db.add(deployment)
-    db.commit()
+    try:
+        deployment.deleted = True
+        db.add(deployment)
+        db.commit()
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Failed to delete deployment: {e.args[0]}")
     return {"ok": True}
 
 
@@ -155,12 +122,18 @@ async def delete_deployment(db: DbDependency, id: int):
     summary="Undelete deployment.",
     response_model=DeploymentFull
 )
-async def undelete_deployment(db: DbDependency, name: str):
-    deployment = get_deployment_by_id(db, name, True)
-    deployment.deleted = False
-    db.add(deployment)
-    db.commit()
-    db.refresh(deployment)
+async def undelete_deployment(db: DbDependency, id: int):
+    deployment = get_deployment_by_id(db, id, True)
+    check_valid_deployment(db, deployment)
+    try:
+        deployment.deleted = False
+        db.add(deployment)
+        db.commit()
+        db.refresh(deployment)
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Failed to undelete deployment: {e.args[0]}")
     return deployment
 
 
@@ -225,3 +198,38 @@ def deployment_used(db: Session, id: int):
         where(DeploymentDevice.deleted == False)
     ).first()
     return True if devices or deployment_devices else False
+
+
+def check_valid_deployment(
+        db: Session, deployment: DeploymentBase, id: int = None):
+    # Check foreign key validity.
+    if not network_exists(db, deployment.network_id):
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Network {deployment.network_id} not found."
+        )
+    if not devicetype_exists(db, deployment.devicetype_name):
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Device type {deployment.devicetype_name} not found."
+        )
+    # Maintain unique deployment names for a network and devicetype.
+    check_unique = True
+    if id:
+        current_deployment = get_deployment_by_id(db, id)
+        check_unique = (
+            current_deployment.network_id != deployment.network_id or
+            current_deployment.devicetype_name != deployment.devicetype_name or
+            current_deployment.name != deployment.name)
+
+    if check_unique and deployment_name_exists(
+        db,
+        deployment.network_id,
+        deployment.devicetype_name,
+        deployment.name
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=(f"Deployment {deployment.name} already exists for "
+                    f"{deployment.devicetype_name} in network "
+                    f"{deployment.network_id}."))

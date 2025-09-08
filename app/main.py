@@ -52,10 +52,6 @@ app = FastAPI(
             "description": "Operations for data management in the server, uploading and downloading."
         },
         {
-            "name": "Deployments",
-            "description": "Operations with deployments."
-        },
-        {
             "name": "Other",
             "description": "Other operations."
         }

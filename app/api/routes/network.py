@@ -29,11 +29,12 @@ async def get_networks(
     db: DbDependency,
     organisation_name: str = None,
     country_code: str = None,
+    deleted: bool = False,
     offset: int = 0,
     limit: int = 100
 ):
     sql = (select(Network).
-           where(Network.deleted == False).
+           where(Network.deleted == deleted).
            limit(limit).
            offset(offset))
     if organisation_name:
@@ -58,25 +59,7 @@ async def get_network(db: DbDependency, id: int):
     "/", summary="Create network.", response_model=NetworkFull
 )
 async def create_network(db: DbDependency, body: NetworkBase):
-    # Check foreign key validity
-    if not organisation_exists(db, body.organisation_name):
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Organisation {body.organisation_name} not found."
-        )
-    if not country_exists(db, body.country_code):
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Country {body.country_code} not found."
-        )
-    # Maintain unique network names for an organisation and country
-    if network_name_exists(
-            db, body.organisation_name, body.country_code, body.name):
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail=(f"Network {body.name} already exists for "
-                    f"{body.organisation_name} in {body.country_code}."))
-
+    check_valid_network(db, body)
     try:
         body.organisation_name = body.organisation_name.upper()
         body.country_code = body.country_code.upper()
@@ -99,31 +82,8 @@ async def create_network(db: DbDependency, body: NetworkBase):
 async def update_network(
     db: DbDependency, id: int, body: NetworkBase
 ):
-    # Check foreign key validity
-    if not organisation_exists(db, body.organisation_name):
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Organisation {body.organisation_name} not found."
-        )
-    if not country_exists(db, body.country_code):
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Country {body.country_code} not found."
-        )
-
+    check_valid_network(db, body)
     current_network = get_network_by_id(db, id)
-    # Maintain unique network names for an organisation and country
-    if (current_network.organisation_name != body.organisation_name or
-        current_network.country_code != body.country_code or
-            current_network.name != body.name):
-        if network_name_exists(
-            db, body.organisation_name, body.country_code, body.name
-        ):
-            raise HTTPException(
-                status_code=status.HTTP_409_CONFLICT,
-                detail=(f"Network {body.name} already exists for "
-                        f"{body.organisation_name} in {body.country_code}."))
-
     try:
         body.organisation_name = body.organisation_name.upper()
         body.country_code = body.country_code.upper()
@@ -141,14 +101,20 @@ async def update_network(
 
 @router.delete("/{id}", summary="Delete network.")
 async def delete_network(db: DbDependency, id: int):
+    # Check foreign key validity.
     if network_used(db, id):
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail=f"Network {id} is in use and cannot be deleted.")
     network = get_network_by_id(db, id)
-    network.deleted = True
-    db.add(network)
-    db.commit()
+    try:
+        network.deleted = True
+        db.add(network)
+        db.commit()
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Failed to delete network: {e.args[0]}")
     return {"ok": True}
 
 
@@ -157,12 +123,18 @@ async def delete_network(db: DbDependency, id: int):
     summary="Undelete network.",
     response_model=NetworkFull
 )
-async def undelete_network(db: DbDependency, name: str):
-    network = get_network_by_id(db, name, True)
-    network.deleted = False
-    db.add(network)
-    db.commit()
-    db.refresh(network)
+async def undelete_network(db: DbDependency, id: int):
+    network = get_network_by_id(db, id, True)
+    check_valid_network(db, network)
+    try:
+        network.deleted = False
+        db.add(network)
+        db.commit()
+        db.refresh(network)
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Failed to undelete network: {e.args[0]}")
     return network
 
 
@@ -223,3 +195,36 @@ def network_used(db: Session, id: int):
         where(Deployment.deleted == False)
     ).first()
     return True if deployments else False
+
+
+def check_valid_network(db: Session, network: NetworkBase, id: int = None):
+    # Check foreign key validity.
+    if not organisation_exists(db, network.organisation_name):
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Organisation {network.organisation_name} not found."
+        )
+    if not country_exists(db, network.country_code):
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Country {network.country_code} not found."
+        )
+    # Maintain unique network names for an organisation and country.
+    check_unique = True
+    if id:
+        current_network = get_network_by_id(db, id)
+        check_unique = (
+            current_network.organisation_name != network.organisation_name or
+            current_network.country_code != network.country_code or
+            current_network.name != network.name)
+
+    if check_unique and network_name_exists(
+        db,
+        network.organisation_name,
+        network.country_code,
+        network.name
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=(f"Network {network.name} already exists for "
+                    f"{network.organisation_name} in {network.country_code}."))

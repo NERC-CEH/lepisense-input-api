@@ -22,11 +22,11 @@ class CountryFull(CountryBase):
     response_model=list[CountryFull]
 )
 async def get_countries(
-    db: DbDependency, offset: int = 0, limit: int = 100
+    db: DbDependency, deleted: bool = False, offset: int = 0, limit: int = 100
 ):
     countries = db.exec(
         select(Country).
-        where(Country.deleted == False).
+        where(Country.deleted == deleted).
         limit(limit).
         offset(offset)
     ).all()
@@ -95,9 +95,14 @@ async def delete_country(code: str, db: DbDependency):
             status_code=status.HTTP_409_CONFLICT,
             detail=f"Country {code} is in use and cannot be deleted.")
     country = get_country_by_code(db, code)
-    country.deleted = True
-    db.add(country)
-    db.commit()
+    try:
+        country.deleted = True
+        db.add(country)
+        db.commit()
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Failed to delete country: {e.args[0]}")
     return {"ok": True}
 
 
@@ -108,10 +113,15 @@ async def delete_country(code: str, db: DbDependency):
 )
 async def undelete_organisation(db: DbDependency, name: str):
     country = get_country_by_code(db, name, True)
-    country.deleted = False
-    db.add(country)
-    db.commit()
-    db.refresh(country)
+    try:
+        country.deleted = False
+        db.add(country)
+        db.commit()
+        db.refresh(country)
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Failed to undelete country: {e.args[0]}")
     return country
 
 

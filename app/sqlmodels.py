@@ -46,11 +46,12 @@ class Deployment(SQLModel, table=True):
 
 class Device(SQLModel, table=True):
     id: Optional[int] = Field(primary_key=True, default=None)
-    uid: int
-    name: str
+    uid: str
+    name: Optional[str]
     devicetype_name: str = Field(foreign_key='devicetype.name', index=True)
     version: str
-    current_deployment_id: int = Field(foreign_key='deployment.id', index=True)
+    current_deployment_id: Optional[int] = Field(
+        foreign_key='deployment.id', index=True)
     deleted: bool = Field(default=False)
 
 
@@ -65,5 +66,5 @@ class DeploymentDevice(SQLModel, table=True):
     device_id: int = Field(foreign_key='device.id', index=True)
     deployment_id: int = Field(foreign_key='deployment.id', index=True)
     start_date: date
-    end_date: date
+    end_date: Optional[date]
     deleted: bool = Field(default=False)
