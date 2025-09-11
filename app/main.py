@@ -45,17 +45,7 @@ app = FastAPI(
     license_info={
         "name": "Apache 2.0",
         "identifier": "MIT",
-    },
-    openapi_tags=[
-        {
-            "name": "Data",
-            "description": "Operations for data management in the server, uploading and downloading."
-        },
-        {
-            "name": "Other",
-            "description": "Other operations."
-        }
-    ]
+    }
 )
 
 # Store the engine in the app.state so it is available in requests.

@@ -1,27 +1,29 @@
+import logging
+
 from fastapi import APIRouter, HTTPException, status
 from pydantic import BaseModel, Field
 from sqlmodel import Session, select
-from typing import Optional
 
 from app.database import DbDependency
 from app.sqlmodels import Device, DeploymentDevice
 from app.api.routes.deployment import deployment_exists
 from app.api.routes.devicetype import devicetype_exists
 
+logger = logging.getLogger(__name__)
+
 router = APIRouter(prefix="/device", tags=["Device"])
 
 
 class DeviceBase(BaseModel):
-    uid: str = Field(description="Unique device id.")
-    name: Optional[str] = Field(description="An optional device name.")
+    name: str | None = Field(description="An optional device name.")
     devicetype_name: str = Field(
         description="A name from the device type table")
     version: str
-    current_deployment_id: Optional[int] = None
+    current_deployment_id: int | None = None
 
 
 class DeviceFull(DeviceBase):
-    id: int
+    id: str = Field(description="Unique device id.")
 
 
 @router.get(
@@ -60,8 +62,12 @@ async def get_device(db: DbDependency, id: int):
     "/", summary="Create device.", response_model=DeviceFull
 )
 async def create_device(
-    db: DbDependency, body: DeviceBase
+    db: DbDependency, body: DeviceFull
 ):
+    if device_exists(db, body.id):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"Device {body.id} already exists.")
     check_valid_device(db, body)
     try:
         body.devicetype_name = body.devicetype_name.lower()

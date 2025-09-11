@@ -1,3 +1,5 @@
+import logging
+
 from fastapi import APIRouter, HTTPException, status
 from pydantic import BaseModel
 from sqlmodel import Session, select
@@ -6,6 +8,8 @@ from app.database import DbDependency
 from app.sqlmodels import Network, Deployment
 from app.api.routes.organisation import organisation_exists
 from app.api.routes.country import country_exists
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/network", tags=["Network"])
 
@@ -151,8 +155,9 @@ def get_network_by_id(db: Session, id: int, deleted: bool = False):
     return network
 
 
-def network_name_exists(
-        db: Session, organisation_name: str, country_code: str, name: str):
+def get_network_by_name(
+        db: Session, name: str, organisation_name: str, country_code: str
+):
     organisation_name = organisation_name.upper()
     country_code = country_code.upper()
     network = db.exec(
@@ -167,10 +172,14 @@ def network_name_exists(
             detail=(f"Network {name} already exists for "
                     f"{organisation_name} in {country_code}"
                     " but is deleted."))
-    elif network and not network.deleted:
-        return True
-    else:
-        return False
+    return network
+
+
+def network_name_exists(
+        db: Session, name: str, organisation_name: str, country_code: str
+):
+    network = get_network_by_name(db, name, organisation_name, country_code)
+    return True if network else False
 
 
 def network_exists(db: Session, id: int):
@@ -220,9 +229,9 @@ def check_valid_network(db: Session, network: NetworkBase, id: int = None):
 
     if check_unique and network_name_exists(
         db,
+        network.name,
         network.organisation_name,
-        network.country_code,
-        network.name
+        network.country_code
     ):
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,

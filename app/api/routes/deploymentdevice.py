@@ -1,12 +1,16 @@
+import logging
+
 from datetime import date
 from fastapi import APIRouter, HTTPException, status
 from pydantic import BaseModel
 from sqlmodel import Session, select
 
 from app.database import DbDependency
-from app.sqlmodels import Device, DeploymentDevice
+from app.sqlmodels import DeploymentDevice
 from app.api.routes.deployment import deployment_exists
 from app.api.routes.device import device_exists
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/deploymnent-device", tags=["Deployment Device"])
 

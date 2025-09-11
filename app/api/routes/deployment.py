@@ -1,3 +1,5 @@
+import logging
+
 from fastapi import APIRouter, HTTPException, status
 from pydantic import BaseModel
 from sqlmodel import Session, select
@@ -7,6 +9,8 @@ from app.sqlmodels import Deployment, Device, DeploymentDevice
 from app.api.routes.network import network_exists
 from app.api.routes.devicetype import devicetype_exists
 
+logger = logging.getLogger(__name__)
+
 router = APIRouter(prefix="/deployment", tags=["Deployment"])
 
 
@@ -14,6 +18,7 @@ class DeploymentBase(BaseModel):
     network_id: int
     devicetype_name: str
     name: str
+    description: str | None
     latitude: float
     longitude: float
     active: bool
@@ -151,23 +156,41 @@ def get_deployment_by_id(db: Session, id: int, deleted: bool = False):
 
 
 def deployment_name_exists(
-        db: Session, network_id: int, devicetype_name: str, name: str):
-    devicetype_name = devicetype_name.lower()
-    deployment = db.exec(
-        select(Deployment).
-        where(Deployment.network_id == network_id).
-        where(Deployment.devicetype_name == devicetype_name).
-        where(Deployment.name == name)
-    ).first()
-    if deployment and deployment.deleted:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail=(f"Deployment {name} already exists for "
-                    f"{devicetype_name} in network {network_id}."
-                    " but is deleted."))
-    elif deployment and not deployment.deleted:
-        return True
+        db: Session, name: str, network_id: int, devicetype_name: str = None):
+    sql = (select(Deployment).
+           where(Deployment.name == name).
+           where(Deployment.network_id == network_id))
+    if devicetype_name:
+        devicetype_name = devicetype_name.lower()
+        # Query will resolve to a single deployment or none.
+        sql = sql.where(Deployment.devicetype_name == devicetype_name)
+        deployment = db.exec(sql).first()
+        if deployment and deployment.deleted:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=(f"Deployment {name} already exists for "
+                        f"{devicetype_name} in network {network_id}."
+                        " but is deleted."))
+        elif deployment and not deployment.deleted:
+            return True
+        else:
+            return False
     else:
+        # Query may resolve to multiple deployments.
+        all_deleted = False
+        deployments = db.exec(sql)
+        for deployment in deployments:
+            if not deployment.deleted:
+                return True
+            else:
+                all_deleted = True
+
+        if all_deleted:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=(f"Deployment {name} already exists in network "
+                        f"{network_id} but is deleted."))
+
         return False
 
 
@@ -224,9 +247,9 @@ def check_valid_deployment(
 
     if check_unique and deployment_name_exists(
         db,
+        deployment.name,
         deployment.network_id,
-        deployment.devicetype_name,
-        deployment.name
+        deployment.devicetype_name
     ):
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,

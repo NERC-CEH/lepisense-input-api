@@ -1,9 +1,13 @@
+import logging
+
 from fastapi import APIRouter, HTTPException, status
 from pydantic import BaseModel, Field
 from sqlmodel import Session, select
 
 from app.database import DbDependency
 from app.sqlmodels import Organisation, Network
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/organisation", tags=["Organisation"])
 

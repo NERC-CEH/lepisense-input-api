@@ -1,6 +1,5 @@
 from datetime import date
 from sqlmodel import SQLModel, Field
-from typing import Optional
 
 
 # Create a naming convention.
@@ -26,7 +25,7 @@ class Country(SQLModel, table=True):
 
 
 class Network(SQLModel, table=True):
-    id: Optional[int] = Field(primary_key=True, default=None)
+    id: int | None = Field(primary_key=True, default=None)
     organisation_name: str = Field(foreign_key='organisation.name', index=True)
     country_code: str = Field(foreign_key='country.code', index=True)
     name: str
@@ -34,37 +33,37 @@ class Network(SQLModel, table=True):
 
 
 class Deployment(SQLModel, table=True):
-    id: Optional[int] = Field(primary_key=True, default=None)
+    id: int | None = Field(primary_key=True, default=None)
     network_id: int = Field(foreign_key='network.id', index=True)
     devicetype_name: str = Field(foreign_key='devicetype.name', index=True)
     name: str
+    description: str | None
     latitude: float
     longitude: float
-    active: bool
+    active: bool = Field(default=False)
     deleted: bool = Field(default=False)
 
 
 class Device(SQLModel, table=True):
-    id: Optional[int] = Field(primary_key=True, default=None)
-    uid: str
-    name: Optional[str]
+    id: str = Field(primary_key=True)
+    name: str | None
     devicetype_name: str = Field(foreign_key='devicetype.name', index=True)
     version: str
-    current_deployment_id: Optional[int] = Field(
+    current_deployment_id: int | None = Field(
         foreign_key='deployment.id', index=True)
     deleted: bool = Field(default=False)
 
 
 class DeviceType(SQLModel, table=True):
-    name: str = Field(primary_key=True, default=None)
+    name: str = Field(primary_key=True)
     description: str
     deleted: bool = Field(default=False)
 
 
 class DeploymentDevice(SQLModel, table=True):
-    id: Optional[int] = Field(primary_key=True, default=None)
-    device_id: int = Field(foreign_key='device.id', index=True)
+    id: int | None = Field(primary_key=True, default=None)
+    device_id: str = Field(foreign_key='device.id', index=True)
     deployment_id: int = Field(foreign_key='deployment.id', index=True)
     start_date: date
-    end_date: Optional[date]
+    end_date: date | None
     deleted: bool = Field(default=False)
