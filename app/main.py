@@ -8,6 +8,7 @@ from app.api.main import router
 
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
+from fastapi.middleware.gzip import GZipMiddleware
 from mangum import Mangum
 
 
@@ -47,6 +48,8 @@ app = FastAPI(
         "identifier": "MIT",
     }
 )
+
+app.add_middleware(GZipMiddleware, minimum_size=1000, compresslevel=5)
 
 # Store the engine in the app.state so it is available in requests.
 app.state.engine = engine
