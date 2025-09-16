@@ -4,7 +4,7 @@ import mimetypes
 
 from datetime import date
 from fastapi import APIRouter, HTTPException, status, UploadFile
-from fastapi.responses import StreamingResponse
+from fastapi.responses import Response
 from sqlmodel import Session, select
 from typing import List
 
@@ -138,15 +138,9 @@ async def generate_presigned_url(
 @router.get(
     "/{organisation}/{country}/{network}/{deployment}/{devicetype}/{year}/{month}/{day}/{filename}",
     summary="Get file",
-    response_class=StreamingResponse,
     responses={
         200: {
-            "content": {"image/jpeg": {
-                "schema": {
-                    "type": "string",
-                    "format": "binary"
-                }
-            }},
+            "content": {"image/jpeg": {}},
         }
     })
 async def get_file(
@@ -164,41 +158,43 @@ async def get_file(
     filename: str
 ):
 
-    async def get_stream():
-        bucket = 'lepisense-images-' + env.environment
-        prefix = validate_prefix(
-            db,
-            organisation,
-            country,
-            network,
-            deployment,
-            devicetype,
-            year,
-            month,
-            day
-        )
-        key = f"{prefix}/{filename}"
+    bucket = 'lepisense-images-' + env.environment
+    prefix = validate_prefix(
+        db,
+        organisation,
+        country,
+        network,
+        deployment,
+        devicetype,
+        year,
+        month,
+        day
+    )
+    key = f"{prefix}/{filename}"
 
-        try:
-            print(f"Getting {key}")
-            response = await s3.get_object(Bucket=bucket, Key=key)
-            print(f"Got {response}")
-            async for chunk in response['Body']:
-                yield chunk
-        except s3.exceptions.NoSuchKey:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="File not found.")
-        except Exception as e:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Failed to get file: {e.args[0]}")
+    try:
+        logger.debug(f"Requesting from S3 {key}")
+        response = await s3.get_object(Bucket=bucket, Key=key)
+        logger.debug(f"Response from S3: {response}")
+        image = await response['Body'].read()
+    except s3.exceptions.NoSuchKey:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="File not found.")
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Failed to get file: {e.args[0]}")
 
-    media_type = mimetypes.guess_type(filename)[0]
-    if not media_type:
-        media_type = "application/octet-stream"
-
-    return StreamingResponse(get_stream(), media_type=media_type)
+    # The Mangum adapter will base64 encode the binary content
+    # for us and set isBase64Encoded to true in the response that is handed
+    # to the API Gateway.
+    return Response(
+        content=image,
+        status_code=200,
+        media_type=response['ContentType'],
+        headers={"Content-Type": response['ContentType']}
+    )
 
 
 @router.post("/", summary="Upload files.")
@@ -206,12 +202,12 @@ async def upload_files(
     db: DbDependency,
     env: EnvDependency,
     s3: S3Dependency,
-    id: str,
+    device_id: str,
     date: date,
     files: List[UploadFile]
 ):
     bucket = 'lepisense-images-' + env.environment
-    prefix = get_prefix(db, id, date)
+    prefix = get_prefix(db, device_id, date)
 
     try:
         tasks = [upload_file(s3, bucket, prefix, file) for file in files]
@@ -227,9 +223,17 @@ async def upload_files(
 
 
 async def upload_file(s3, bucket, prefix, file):
+    # It is important to save the media type of the file in S3. If not,
+    # when getting the object in future, the media type will be
+    # application/octet-stream and, I suspect, base64 encoded.
+    media_type = mimetypes.guess_type(file.filename)[0]
+    if not media_type:
+        media_type = "application/octet-stream"
+    args = {'ContentType': media_type}
+
     try:
         await s3.upload_fileobj(
-            file.file, bucket, f"{prefix}/{file.filename}")
+            file.file, bucket, f"{prefix}/{file.filename}", ExtraArgs=args)
     except Exception as e:
         logger.error(
             f"Error uploading {file.filename} to {bucket}/{prefix}. "
