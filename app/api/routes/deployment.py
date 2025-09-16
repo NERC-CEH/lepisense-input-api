@@ -5,7 +5,7 @@ from pydantic import BaseModel
 from sqlmodel import Session, select
 
 from app.database import DbDependency
-from app.sqlmodels import Deployment, Device, DeploymentDevice
+from app.sqlmodels import Deployment, Device, DeploymentDevice, Network
 from app.api.routes.network import network_exists
 from app.api.routes.devicetype import devicetype_exists
 
@@ -35,17 +35,35 @@ class DeploymentFull(DeploymentBase):
 )
 async def get_deployments(
     db: DbDependency,
-    network_id: int = None,
+    organisation_name: str | None = None,
+    country_code: str | None = None,
+    network_name: str | None = None,
+    deployment_name: str | None = None,
+    devicetype_name: str | None = None,
+    active: bool = True,
     deleted: bool = False,
     offset: int = 0,
     limit: int = 100
 ):
     sql = (select(Deployment).
+           join(Network, Network.id == Deployment.network_id).
            where(Deployment.deleted == deleted).
+           where(Deployment.active == active).
            limit(limit).
            offset(offset))
-    if network_id:
-        sql = sql.where(Deployment.network_id == network_id)
+    if organisation_name:
+        organisation_name = organisation_name.upper()
+        sql = sql.where(Network.organisation_name == organisation_name)
+    if country_code:
+        country_code = country_code.upper()
+        sql = sql.where(Network.country_code == country_code)
+    if network_name:
+        sql = sql.where(Network.name == network_name)
+    if deployment_name:
+        sql = sql.where(Deployment.name == deployment_name)
+    if devicetype_name:
+        devicetype_name = devicetype_name.lower()
+        sql = sql.where(Deployment.devicetype_name == devicetype_name)
 
     deployments = db.exec(sql).all()
     return deployments

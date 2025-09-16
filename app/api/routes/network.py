@@ -221,6 +221,8 @@ def check_valid_network(db: Session, network: NetworkBase, id: int = None):
     # Maintain unique network names for an organisation and country.
     check_unique = True
     if id:
+        # When updating, a uniqueness check is not done if organisation,
+        # country and name have not changed.
         current_network = get_network_by_id(db, id)
         check_unique = (
             current_network.organisation_name != network.organisation_name or
