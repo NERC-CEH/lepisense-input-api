@@ -54,7 +54,7 @@ async def get_devices(
     summary="Device details.",
     response_model=DeviceFull
 )
-async def get_device(db: DbDependency, id: int):
+async def get_device(db: DbDependency, id: str):
     return get_device_by_id(db, id)
 
 
@@ -88,7 +88,7 @@ async def create_device(
     response_model=DeviceFull
 )
 async def update_device(
-    db: DbDependency, id: int, body: DeviceBase
+    db: DbDependency, id: str, body: DeviceBase
 ):
     check_valid_device(db, body)
     current_device = get_device_by_id(db, id)
@@ -107,7 +107,7 @@ async def update_device(
 
 
 @router.delete("/{id}", summary="Delete device.")
-async def delete_device(db: DbDependency, id: int):
+async def delete_device(db: DbDependency, id: str):
     if device_used(db, id):
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
@@ -129,8 +129,8 @@ async def delete_device(db: DbDependency, id: int):
     summary="Undelete device.",
     response_model=DeviceFull
 )
-async def undelete_device(db: DbDependency, name: str):
-    device = get_device_by_id(db, name, True)
+async def undelete_device(db: DbDependency, id: str):
+    device = get_device_by_id(db, id, True)
     check_valid_device(db, device)
     try:
         device.deleted = False
@@ -144,7 +144,7 @@ async def undelete_device(db: DbDependency, name: str):
     return device
 
 
-def get_device_by_id(db: Session, id: int, deleted: bool = False):
+def get_device_by_id(db: Session, id: str, deleted: bool = False):
     device = db.exec(
         select(Device).
         where(Device.id == id).
@@ -157,7 +157,7 @@ def get_device_by_id(db: Session, id: int, deleted: bool = False):
     return device
 
 
-def device_exists(db: Session, id: int):
+def device_exists(db: Session, id: str):
     device = db.exec(
         select(Device).
         where(Device.id == id)
@@ -172,7 +172,7 @@ def device_exists(db: Session, id: int):
         return False
 
 
-def device_used(db: Session, id: int):
+def device_used(db: Session, id: str):
     deployment_devices = db.exec(
         select(DeploymentDevice).
         where(DeploymentDevice.device_id == id).
