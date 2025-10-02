@@ -8,6 +8,7 @@ from app.api.main import router
 
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
 from mangum import Mangum
 
@@ -50,6 +51,12 @@ app = FastAPI(
 )
 
 app.add_middleware(GZipMiddleware, minimum_size=1000, compresslevel=5)
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_methods=["*"],
+    allow_headers=["*"]
+)
 
 # Store the engine in the app.state so it is available in requests.
 app.state.engine = engine
