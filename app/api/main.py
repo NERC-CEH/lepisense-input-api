@@ -9,10 +9,10 @@ from app.api.routes.deployment import router as deployment_router
 from app.api.routes.device import router as device_router
 from app.api.routes.deploymentdevice import router as deploymentdevice_router
 from app.api.routes.file import router as file_router
+from app.api.routes.database import router as database_router
 
-from fastapi import APIRouter, Request
+from fastapi import APIRouter
 from fastapi.responses import RedirectResponse
-from sqlmodel import SQLModel
 
 import logging
 
@@ -28,17 +28,10 @@ router.include_router(deployment_router)
 router.include_router(device_router)
 router.include_router(deploymentdevice_router)
 router.include_router(file_router)
+router.include_router(database_router)
 
 
 @router.get("/", include_in_schema=False)
 async def main(env: EnvDependency):
     return RedirectResponse(
         url="/" + env.environment + "/docs")
-
-
-@router.get("/reset", summary="Reset the database, deleting all contents.")
-async def reset(request: Request):
-    engine = request.app.state.engine
-    SQLModel.metadata.drop_all(engine)
-    SQLModel.metadata.create_all(engine)
-    return {"ok": True}

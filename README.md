@@ -42,14 +42,7 @@ Use the `sam local start-api` to run the API locally on port 3000.
 sam local start-api
 curl http://localhost:3000/
 ```
-
-
-
-
-
-5. **Add `deployments_info.csv`:**
-   Add the file named `deployments_info.csv` with the information about your AMI deployments.
-   
+  
 ## Database Setup
 
 The Relational Database Service (RDS) has been chosen to provide a managed
@@ -82,6 +75,23 @@ POSTGRES_USER: postgres
 POSTGRES_PASSWORD: your password
 POSTGRES_DB: lepisense
 
+### Database Migrations
+
+Alembic is installed for database migrations. The implementation is a bit odd
+as there is no access to the database except via the lambda function and the 
+API it provides.
+
+First make any changes that are needed to app.sqlmodels and deploy the update.
+Use the `/database/revision` endpoint to then cause alembic to autogenerate a
+revision file. Paste this in to the alembic/versions folder with a file name 
+in the format `<date as yyyymmdd>-<time as hhmm>-<revision id>-<description>.py`
+
+Rebuild and redeploy the function then use the `/database/upgrade` endpoint to 
+cause the database to be updated.
+
+On first run, with a new database, to ensure Alembic is in step with the 
+version of the database created by FastAPI/SqlModel, use the `database/stamp`
+endpoint.
 
 ## Storage Setup
 
@@ -126,6 +136,10 @@ deployment.
 
 
 
+<!-- 
+
+ORIGINAL DOCS FOLLOW - NOW OBSOLETE
+
 ## Using the Upload Page
 
 ### Accessing the Upload Page
@@ -145,7 +159,7 @@ Once the application is running, open your web browser and navigate to http://lo
 2. **Upload the files::**
    - Click the ```Upload``` button to start the upload process.
    - A spinner will appear, and an alert will notify you not to close or refresh the page while uploading.
-   - Once the upload is complete, a success message will be displayed.
+   - Once the upload is complete, a success message will be displayed. 
   
   
 ## Endpoints
@@ -255,3 +269,4 @@ This project is licensed under the Apache 2.0 License.
 
 ## Contact
 For more information, visit [UKCEH AMI System](https://www.ceh.ac.uk/solutions/equipment/automated-monitoring-insects-trap) or contact the team at [ami-system@ceh.ac.uk](mailto:ami-system@ceh.ac.uk).
+-->
