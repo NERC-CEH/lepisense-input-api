@@ -20,6 +20,9 @@ class EnvSettings(BaseSettings):
     postgres_db: str = ''
     environment: str = 'prod'  # ['dev'|'test'|'prod']
     log_level: str = 'WARNING'
+    initial_account_name: str = 'lepisense'
+    initial_account_pass: str = ''
+    initial_account_email: str = 'lepisense@example.com'
 
     # Making the settings frozen means they are hashable.
     # https://github.com/fastapi/fastapi/issues/1985#issuecomment-1290899088

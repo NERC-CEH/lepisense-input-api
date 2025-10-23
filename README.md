@@ -66,15 +66,6 @@ would be different in another installation. See
 https://docs.aws.amazon.com/lambda/latest/dg/configuration-vpc.html
 Broader use of CloudFormation or Terraform would help solve this. 
 
-In the [Lambda Console](console.aws.amazon.com/lambda/home), add the following
-environment variables using values obtatined from the RDS console.
-
-POSTGRES_HOST: lepisense.c14qc2uwid2u.eu-west-2.rds.amazonaws.com
-POSTGRES_PORT: 5432
-POSTGRES_USER: postgres
-POSTGRES_PASSWORD: your password
-POSTGRES_DB: lepisense
-
 ### Database Migrations
 
 Alembic is installed for database migrations. The implementation is a bit odd
@@ -93,12 +84,44 @@ On first run, with a new database, to ensure Alembic is in step with the
 version of the database created by FastAPI/SqlModel, use the `database/stamp`
 endpoint.
 
+## Environment Variables
+
+In the [Lambda Console](console.aws.amazon.com/lambda/home), add the following
+environment variables.
+
+For connection to the database, supply values obtatined from the RDS console.
+- POSTGRES_HOST: lepisense.c14qc2uwid2u.eu-west-2.rds.amazonaws.com
+- POSTGRES_PORT: 5432
+- POSTGRES_USER: postgres
+- POSTGRES_PASSWORD: a password
+- POSTGRES_DB: lepisense
+
+In addition, add values for an initial user having root access to the API. 
+- INITIAL_USER_NAME: a username, e.g. userone
+- INITIAL_USER_PASS: a mighty password
+- INITIAL_USER_EMAIL: an email address
+
+Add the following environment variables to support authentication:
+- JWT_KEY = a key obtained with `openssl rand -hex 32`
+- JWT_ALGORITHM = 'HS256'
+- JWT_EXPIRES_MINUTES = '15'
+
+Add a switch to select the environment from [dev|test|prod]. Defaults to prod.
+- ENVIRONMENT = 'dev'
+
+Add a switch to selct the log level from [debug|info|warning|error|critical].
+Defaults to warning.
+- LOG_LEVEL = 'info'
+
 ## Storage Setup
 
 The Simple Storage Service (S3) is used for storing images sent to this API.
 
 A storage bucket has been created with the 
 [S3 Console](console.aws.amazon.com/s3/home)
+
+The bucket is named `lepisense-images-<environment>` where environment is
+replaced by the value of the environment variable of that name.
 
 ## Deployment
 

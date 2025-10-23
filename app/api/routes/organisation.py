@@ -5,7 +5,7 @@ from pydantic import BaseModel, Field
 from sqlmodel import Session, select
 
 from app.database import DbDependency
-from app.sqlmodels import Organisation, Network
+from app.sqlmodels import Organisation, Network, Account
 
 logger = logging.getLogger(__name__)
 
@@ -167,6 +167,11 @@ def organisation_used(db: Session, name: str):
     networks = db.exec(
         select(Network).
         where(Network.organisation_name == name).
-        where(Network.deleted == False)
+        where(Network.deleted is False)
     ).first()
-    return True if networks else False
+    accounts = db.exec(
+        select(Account).
+        where(Account.organisation_name == name).
+        where(Account.deleted is False)
+    ).first()
+    return True if networks or accounts else False

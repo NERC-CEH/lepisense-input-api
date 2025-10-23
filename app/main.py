@@ -5,7 +5,6 @@ from app.database import create_db
 from app.env import get_env_settings
 from app.api.main import router
 
-
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware

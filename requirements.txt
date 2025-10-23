@@ -1,5 +1,6 @@
 aioboto3
 alembic
+bcrypt
 boto3
 fastapi
 mangum
@@ -15,6 +16,7 @@ psycopg2-binary \
   --config-settings="python-version=3.13" \
   --config-setting="only-binary=:all:"
 pydantic-settings
+python-jose[cryptography]
 python-multipart
 sqlmodel
 

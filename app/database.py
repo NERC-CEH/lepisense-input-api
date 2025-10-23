@@ -17,7 +17,7 @@ def create_db(env: EnvSettings):
               f"{env.postgres_host}:{env.postgres_port}/{env.postgres_db}")
 
     engine = create_engine(pg_url, echo=True)
-    SQLModel.metadata.create_all(engine)
+    # Use the database API endpoints to create and upgrade the database.
     return engine
 
 

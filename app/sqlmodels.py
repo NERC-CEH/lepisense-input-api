@@ -1,5 +1,6 @@
 from datetime import date
-from sqlmodel import SQLModel, Field
+from sqlalchemy import false
+from sqlmodel import SQLModel, Column, Field, LargeBinary
 
 
 # Create a naming convention.
@@ -15,13 +16,19 @@ SQLModel.metadata.naming_convention = {
 class Organisation(SQLModel, table=True):
     name: str = Field(primary_key=True)
     full_name: str
-    deleted: bool = Field(default=False)
+    deleted: bool = Field(
+        default=False,
+        sa_column_kwargs={'server_default': false()}
+    )
 
 
 class Country(SQLModel, table=True):
     code: str = Field(primary_key=True)
     name: str
-    deleted: bool = Field(default=False)
+    deleted: bool = Field(
+        default=False,
+        sa_column_kwargs={'server_default': false()}
+    )
 
 
 class Network(SQLModel, table=True):
@@ -29,7 +36,10 @@ class Network(SQLModel, table=True):
     organisation_name: str = Field(foreign_key='organisation.name', index=True)
     country_code: str = Field(foreign_key='country.code', index=True)
     name: str
-    deleted: bool = Field(default=False)
+    deleted: bool = Field(
+        default=False,
+        sa_column_kwargs={'server_default': false()}
+    )
 
 
 class Deployment(SQLModel, table=True):
@@ -40,8 +50,14 @@ class Deployment(SQLModel, table=True):
     description: str | None
     latitude: float
     longitude: float
-    active: bool = Field(default=False)
-    deleted: bool = Field(default=False)
+    active: bool = Field(
+        default=False,
+        sa_column_kwargs={'server_default': false()}
+    )
+    deleted: bool = Field(
+        default=False,
+        sa_column_kwargs={'server_default': false()}
+    )
 
 
 class Device(SQLModel, table=True):
@@ -51,13 +67,19 @@ class Device(SQLModel, table=True):
     version: str
     current_deployment_id: int | None = Field(
         foreign_key='deployment.id', index=True)
-    deleted: bool = Field(default=False)
+    deleted: bool = Field(
+        default=False,
+        sa_column_kwargs={'server_default': false()}
+    )
 
 
 class DeviceType(SQLModel, table=True):
     name: str = Field(primary_key=True)
     description: str
-    deleted: bool = Field(default=False)
+    deleted: bool = Field(
+        default=False,
+        sa_column_kwargs={'server_default': false()}
+    )
 
 
 class DeploymentDevice(SQLModel, table=True):
@@ -66,4 +88,24 @@ class DeploymentDevice(SQLModel, table=True):
     deployment_id: int = Field(foreign_key='deployment.id', index=True)
     start_date: date
     end_date: date | None
-    deleted: bool = Field(default=False)
+    deleted: bool = Field(
+        default=False,
+        sa_column_kwargs={'server_default': false()}
+    )
+
+
+class Account(SQLModel, table=True):
+    name: str = Field(primary_key=True)
+    organisation_name: str | None = Field(
+        foreign_key='organisation.name', index=True)
+    email: str
+    hash: bytes = Field(sa_column=Column(LargeBinary, nullable=False))
+    role: str
+    disabled: bool = Field(
+        default=False,
+        sa_column_kwargs={'server_default': false()}
+    )
+    deleted: bool = Field(
+        default=False,
+        sa_column_kwargs={'server_default': false()}
+    )
