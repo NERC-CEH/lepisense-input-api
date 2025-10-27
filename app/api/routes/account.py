@@ -67,6 +67,7 @@ async def get_accounts(
     )
     if role:
         query = query.where(Account.role == role)
+    # Non-root accounts can only access their own organisation.
     if account.role != Role.ROOT.value:
         query = query.where(Account.organisation_name ==
                             account.organisation_name)
@@ -118,15 +119,15 @@ async def create_account(
             status_code=status.HTTP_409_CONFLICT,
             detail=f"Account {body.name} already exists.")
 
-    if body.organisation is not None:
-        body.organisation = body.organisation.upper()
+    if body.organisation_name is not None:
+        body.organisation_name = body.organisation_name.upper()
 
     if account.role != Role.ROOT.value:
         # Non-root admins can only create accounts for their own organisation.
-        if body.organisation != account.organisation_name:
+        if body.organisation_name != account.organisation_name:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"The organisation must be {account.organisation_name}."
+                detail=f"The organisation_name must be {account.organisation_name}."
             )
         # Non-root admins cannot create root accounts.
         if body.role == Role.ROOT.value:
@@ -134,11 +135,14 @@ async def create_account(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="You are not authorised to create root accounts."
             )
-    elif body.organisation and not organisation_exists(db, body.organisation):
+    elif (
+        body.organisation_name and
+        not organisation_exists(db, body.organisation_name)
+    ):
         # Root admins can create accounts for any organisation or None.
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Organisation {body.organisation} does not exist.")
+            detail=f"Organisation {body.organisation_name} does not exist.")
 
     try:
         body.name = body.name.lower()
@@ -165,12 +169,12 @@ async def update_account(
     body: AccountPatch
 ):
     """Update account with the given name."""
-    if body.organisation is not None:
-        body.organisation = body.organisation.upper()
+    if body.organisation_name is not None:
+        body.organisation_name = body.organisation_name.upper()
 
     if account.role != Role.ROOT.value:
         # Non-root admins can only update accounts for their own organisation.
-        if body.organisation != account.organisation_name:
+        if body.organisation_name != account.organisation_name:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail=f"The organisation must be {account.organisation_name}."
@@ -181,14 +185,16 @@ async def update_account(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="You are not authorised to create root accounts."
             )
-    elif body.organisation and not organisation_exists(db, body.organisation):
+    elif (
+        body.organisation_name and
+        not organisation_exists(db, body.organisation_name)
+    ):
         # Root admins can create accounts for any organisation or None.
-        # TODO If org is None, role must be root.
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Organisation {body.organisation} does not exist.")
+            detail=f"Organisation {body.organisation_name} does not exist.")
 
-    current_account = get_account_by_name(db, name, body.organisation)
+    current_account = get_account_by_name(db, name)
     if name == env.initial_account_name:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
