@@ -109,3 +109,18 @@ class Account(SQLModel, table=True):
         default=False,
         sa_column_kwargs={'server_default': false()}
     )
+
+
+class Inference(SQLModel, table=True):
+    id: int | None = Field(primary_key=True, default=None)
+    deployment_id: int = Field(foreign_key='deployment.id', index=True)
+    date: date
+    task_arn: str | None
+    completed: bool = Field(
+        default=False,
+        sa_column_kwargs={'server_default': false()}
+    )
+    deleted: bool = Field(
+        default=False,
+        sa_column_kwargs={'server_default': false()}
+    )
