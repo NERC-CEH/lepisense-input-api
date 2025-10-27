@@ -131,11 +131,24 @@ def get_current_admin_account(
     return account
 
 
+def get_current_root_account(
+    account:  Annotated[Account, Depends(get_current_account)]
+):
+    """Confirms an access token is valid for a root role."""
+    if (
+        not account.role == Role.ROOT.value
+    ):
+        raise authorization_exception
+    return account
+
+
 # Create a type alias for brevity when defining an endpoint needing
 # authentication.
 Auth: TypeAlias = Annotated[Account, Depends(get_current_account)]
 AdminDependency: TypeAlias = Annotated[Account, Depends(
     get_current_admin_account)]
+RootDependency: TypeAlias = Annotated[Account, Depends(
+    get_current_root_account)]
 
 
 @router.post(

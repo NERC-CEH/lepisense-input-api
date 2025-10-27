@@ -4,13 +4,19 @@ from alembic.script import ScriptDirectory
 from alembic import command
 import logging
 
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, Request, Depends
 from fastapi.responses import FileResponse
 from sqlmodel import SQLModel
 
+from app.auth import get_current_root_account
+
 logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/database", tags=["Database"])
+router = APIRouter(
+    prefix="/database",
+    tags=["Database"],
+    dependencies=[Depends(get_current_root_account)]
+)
 
 
 @router.get("/current", summary="Get current database revision.")
