@@ -16,7 +16,7 @@ router = APIRouter(prefix="/deploymnent-device", tags=["Deployment Device"])
 
 
 class DeploymentDeviceBase(BaseModel):
-    device_id: int
+    device_id: str
     deployment_id: int
     start_date: date
     end_date: date
@@ -33,7 +33,7 @@ class DeploymentDeviceFull(DeploymentDeviceBase):
 )
 async def get_deploymentdevices(
     db: DbDependency,
-    device_id: int = None,
+    device_id: str = None,
     deployment_id: int = None,
     deleted: bool = False,
     offset: int = 0,
