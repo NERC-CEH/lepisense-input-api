@@ -11,11 +11,12 @@ from typing import List
 from app.aws import S3Dependency
 from app.database import DbDependency
 from app.env import EnvDependency
-from app.sqlmodels import Organisation, Network, Deployment, Device
+from app.sqlmodels import Organisation, Network, Deployment, Inference
 from app.api.routes.organisation import organisation_exists
 from app.api.routes.country import country_exists
 from app.api.routes.network import network_name_exists, get_network_by_name
 from app.api.routes.deployment import deployment_name_exists
+from app.api.routes.deploymentdevice import get_deployment_by_device_and_date
 from app.api.routes.devicetype import devicetype_exists
 from app.api.routes.device import get_device_by_id
 
@@ -207,7 +208,8 @@ async def upload_files(
     files: List[UploadFile]
 ):
     bucket = 'lepisense-images-' + env.environment
-    prefix = get_prefix(db, device_id, date)
+    metadata = get_metadata(db, device_id, date)
+    prefix = get_prefix(metadata, date)
 
     try:
         tasks = [upload_file(s3, bucket, prefix, file) for file in files]
@@ -215,11 +217,45 @@ async def upload_files(
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Failed to get file: {e.args[0]}")
+            detail=f"Failed to upload files: {e}")
+
+    deployment = metadata[2]
+    deployment_id = deployment.id
+
+    create_inference(db, device_id, deployment_id, date)
 
     logger.info(
         f"Device {id} uploaded {len(files)} to {prefix}.")
     return {"message": "All files uploaded successfully"}
+
+
+def get_metadata(db: Session, device_id: str, date: date):
+
+    device = get_device_by_id(db, device_id)
+    # The device might not be deployed at the time the file is uploaded
+    # if it is a manual rather than automatic submission. Therefore, we
+    # cannot use device.current_deployment_id.
+    deployment = get_deployment_by_device_and_date(db, device_id, date)
+
+    # Foreign key constraints ensure that organisation and network
+    # exist if the deployment exists.
+    organisation, network = db.exec(
+        select(Organisation, Network).
+        select_from(Deployment).
+        join(Network).
+        join(Organisation).
+        where(Deployment.id == deployment.id)
+    ).first()
+
+    return (organisation, network, deployment, device)
+
+
+def get_prefix(metadata: tuple, date: date):
+
+    (organisation, network, deployment, device) = metadata
+    return (f"{organisation.name}/{network.country_code}/{network.name}/"
+            f"{deployment.name}/{device.devicetype_name}/{date.year}/"
+            f"{date.month}/{date.day}")
 
 
 async def upload_file(s3, bucket, prefix, file):
@@ -241,6 +277,42 @@ async def upload_file(s3, bucket, prefix, file):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"Error uploading {prefix}/{file.filename}: {e.args[0]}")
+
+
+def create_inference(
+        db: Session, device_id: int, deployment_id: int, date: date):
+    """
+    Create a record for an inference job.
+    """
+
+    # Check if inference already exists for the device and date
+    inference = db.exec(
+        select(Inference).
+        where(Inference.device_id == device_id).
+        where(Inference.date == date).
+        where(Inference.deleted == False)  # noqa
+    ).first()
+
+    if inference:
+        if inference.completed:
+            # Update to mark as incomplete.
+            inference.completed = False
+        else:
+            # Do nothing.
+            pass
+    else:
+        # Create new inference.
+        inference = Inference(
+            device_id=device_id,
+            deployment_id=deployment_id,
+            date=date,
+            completed=False
+        )
+
+    # Save to database.
+    db.add(inference)
+    db.commit()
+    db.refresh(inference)
 
 
 def validate_prefix(
@@ -344,27 +416,3 @@ def validate_prefix(
         prefix += f"/{day}"
 
     return prefix
-
-
-def get_prefix(db: Session, id: str, date: date):
-
-    device = get_device_by_id(db, id)
-    if not device.current_deployment_id:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Device {id} is not on deployment.")
-
-    # Foreign key constraints ensure that organisation and network
-    # exist if the deployment exists.
-    organisation, network, deployment, device = db.exec(
-        select(Organisation, Network, Deployment, Device).
-        select_from(Device).
-        join(Deployment).
-        join(Network).
-        join(Organisation).
-        where(Device.id == id)
-    ).first()
-
-    return (f"{organisation.name}/{network.country_code}/{network.name}/"
-            f"{deployment.name}/{device.devicetype_name}/{date.year}/"
-            f"{date.month}/{date.day}")

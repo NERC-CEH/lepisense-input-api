@@ -6,7 +6,7 @@ from pydantic import BaseModel
 from sqlmodel import Session, select
 
 from app.database import DbDependency
-from app.sqlmodels import DeploymentDevice
+from app.sqlmodels import DeploymentDevice, Deployment
 from app.api.routes.deployment import deployment_exists
 from app.api.routes.device import device_exists
 
@@ -150,6 +150,24 @@ def get_deploymentdevice_by_id(db: Session, id: int, deleted: bool = False):
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"No deploymentdevice found with id {id}.")
     return deploymentdevice
+
+
+def get_deployment_by_device_and_date(
+        db: Session, device_id: str, date: date):
+    deployment = db.exec(
+        select(Deployment).
+        join(DeploymentDevice).
+        where(DeploymentDevice.device_id == device_id).
+        where(DeploymentDevice.start_date <= date).
+        where(DeploymentDevice.end_date >= date).
+        where(Deployment.deleted == False).  # noqa
+        where(DeploymentDevice.deleted == False)  # noqa
+    ).first()
+    if not deployment:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"No deployment found for device {device_id} on {date}.")
+    return deployment
 
 
 def deploymentdevice_exists(db: Session, id: int):
