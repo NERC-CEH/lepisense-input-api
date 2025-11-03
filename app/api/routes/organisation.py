@@ -167,11 +167,11 @@ def organisation_used(db: Session, name: str):
     networks = db.exec(
         select(Network).
         where(Network.organisation_name == name).
-        where(Network.deleted is False)
+        where(Network.deleted == False)  # noqa
     ).first()
     accounts = db.exec(
         select(Account).
         where(Account.organisation_name == name).
-        where(Account.deleted is False)
+        where(Account.deleted == False)  # noqa
     ).first()
     return True if networks or accounts else False

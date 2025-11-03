@@ -231,12 +231,12 @@ def deployment_used(db: Session, id: int):
     devices = db.exec(
         select(Device).
         where(Device.current_deployment_id == id).
-        where(Device.deleted == False)
+        where(Device.deleted == False)  # noqa
     ).first()
     deployment_devices = db.exec(
         select(DeploymentDevice).
         where(DeploymentDevice.deployment_id == id).
-        where(DeploymentDevice.deleted == False)
+        where(DeploymentDevice.deleted == False)  # noqa
     ).first()
     return True if devices or deployment_devices else False
 
