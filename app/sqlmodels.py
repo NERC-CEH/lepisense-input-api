@@ -114,6 +114,7 @@ class Account(SQLModel, table=True):
 class Inference(SQLModel, table=True):
     id: int | None = Field(primary_key=True, default=None)
     device_id: str = Field(foreign_key='device.id', index=True)
+    deployment_id: int = Field(foreign_key='deployment.id', index=True)
     date: date
     task_arn: str | None
     completed: bool = Field(
