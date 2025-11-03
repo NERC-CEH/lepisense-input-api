@@ -10,6 +10,7 @@ from app.api.routes.deployment import router as deployment_router
 from app.api.routes.device import router as device_router
 from app.api.routes.deploymentdevice import router as deploymentdevice_router
 from app.api.routes.file import router as file_router
+from app.api.routes.inference import router as inference_router
 from app.api.routes.database import router as database_router
 from app.api.routes.account import router as account_router
 
@@ -31,6 +32,7 @@ router.include_router(deployment_router)
 router.include_router(device_router)
 router.include_router(deploymentdevice_router)
 router.include_router(file_router)
+router.include_router(inference_router)
 router.include_router(database_router)
 router.include_router(account_router)
 
