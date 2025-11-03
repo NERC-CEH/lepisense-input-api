@@ -5,7 +5,7 @@ from pydantic import BaseModel, Field
 from sqlmodel import Session, select
 
 from app.database import DbDependency
-from app.sqlmodels import Device, DeploymentDevice
+from app.sqlmodels import Device, DeploymentDevice, Inference
 from app.api.routes.deployment import deployment_exists
 from app.api.routes.devicetype import devicetype_exists
 
@@ -176,9 +176,14 @@ def device_used(db: Session, id: str):
     deployment_devices = db.exec(
         select(DeploymentDevice).
         where(DeploymentDevice.device_id == id).
-        where(DeploymentDevice.deleted == False)
+        where(DeploymentDevice.deleted == False)  # noqa
     ).first()
-    return True if deployment_devices else False
+    inferences = db.exec(
+        select(Inference).
+        where(Inference.device_id == id).
+        where(Inference.deleted == False)  # noqa
+    ).first()
+    return True if deployment_devices or inferences else False
 
 
 def check_valid_device(db: Session, device: DeviceBase):
