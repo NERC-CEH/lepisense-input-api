@@ -17,6 +17,7 @@ router = APIRouter(prefix="/inference", tags=["Inference"])
 
 class InferenceBase(BaseModel):
     device_id: str
+    deployment_id: int
     date: date
     completed: bool
 
@@ -26,12 +27,12 @@ class InferenceList(InferenceBase):
 
 
 class InferencePatch(InferenceBase):
-    task_arn: str
+    task_arn: str | None
 
 
 class InferenceFull(InferenceBase):
     id: int
-    task_arn: str
+    task_arn: str | None
 
 
 @router.get(
