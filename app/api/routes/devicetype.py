@@ -14,6 +14,7 @@ router = APIRouter(prefix="/device-type", tags=["Device Type"])
 
 class DeviceTypeBase(BaseModel):
     description: str
+    night_session: bool
 
 
 class DeviceTypeFull(DeviceTypeBase):

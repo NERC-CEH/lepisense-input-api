@@ -18,7 +18,7 @@ router = APIRouter(prefix="/inference", tags=["Inference"])
 class InferenceBase(BaseModel):
     device_id: str
     deployment_id: int
-    date: date
+    session_date: date
     completed: bool
 
 

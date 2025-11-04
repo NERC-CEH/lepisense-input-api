@@ -2,7 +2,7 @@ import asyncio
 import logging
 import mimetypes
 
-from datetime import date
+from datetime import date, timedelta
 from fastapi import APIRouter, HTTPException, status, UploadFile
 from fastapi.responses import Response
 from sqlmodel import Session, select
@@ -11,7 +11,9 @@ from typing import List
 from app.aws import S3Dependency
 from app.database import DbDependency
 from app.env import EnvDependency
-from app.sqlmodels import Organisation, Network, Deployment, Inference
+from app.sqlmodels import (
+    Organisation, Network, Deployment, Inference, Device, DeviceType
+)
 from app.api.routes.organisation import organisation_exists
 from app.api.routes.country import country_exists
 from app.api.routes.network import network_name_exists, get_network_by_name
@@ -222,7 +224,16 @@ async def upload_files(
     deployment = metadata[2]
     deployment_id = deployment.id
 
-    create_inference(db, device_id, deployment_id, date)
+    devicetype = metadata[4]
+    night_session = devicetype.night_session
+    filetime = files[0].filename.split(".")[0]
+    # The file name is the form hhmmss.jpg.
+    if night_session and filetime < "120000":
+        # files from night session devices created before midday are
+        # assigned to the previous day.
+        session_date = date - timedelta(days=1)
+
+    create_inference(db, device_id, deployment_id, session_date)
 
     logger.info(
         f"Device {id} uploaded {len(files)} to {prefix}.")
@@ -231,7 +242,18 @@ async def upload_files(
 
 def get_metadata(db: Session, device_id: str, date: date):
 
-    device = get_device_by_id(db, device_id)
+    device, devicetype = db.exec(
+        select(Device, DeviceType).
+        select_from(Device).
+        join(DeviceType).
+        where(Device.id == device_id).
+        where(Device.deleted == False)  # noqa
+    ).first()
+    if not device:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"No device found with id {device_id}.")
+
     # The device might not be deployed at the time the file is uploaded
     # if it is a manual rather than automatic submission. Therefore, we
     # cannot use device.current_deployment_id.
@@ -247,12 +269,12 @@ def get_metadata(db: Session, device_id: str, date: date):
         where(Deployment.id == deployment.id)
     ).first()
 
-    return (organisation, network, deployment, device)
+    return (organisation, network, deployment, device, devicetype)
 
 
 def get_prefix(metadata: tuple, date: date):
 
-    (organisation, network, deployment, device) = metadata
+    (organisation, network, deployment, device, devicetype) = metadata
     return (f"{organisation.name}/{network.country_code}/{network.name}/"
             f"{deployment.name}/{device.devicetype_name}/{date.year}/"
             f"{date.month}/{date.day}")
@@ -280,7 +302,7 @@ async def upload_file(s3, bucket, prefix, file):
 
 
 def create_inference(
-        db: Session, device_id: int, deployment_id: int, date: date):
+        db: Session, device_id: int, deployment_id: int, session_date: date):
     """
     Create a record for an inference job.
     """
@@ -289,7 +311,7 @@ def create_inference(
     inference = db.exec(
         select(Inference).
         where(Inference.device_id == device_id).
-        where(Inference.date == date).
+        where(Inference.session_date == session_date).
         where(Inference.deleted == False)  # noqa
     ).first()
 
@@ -305,7 +327,7 @@ def create_inference(
         inference = Inference(
             device_id=device_id,
             deployment_id=deployment_id,
-            date=date,
+            session_date=session_date,
             completed=False
         )
 

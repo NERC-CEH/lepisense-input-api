@@ -1,5 +1,5 @@
 from datetime import date
-from sqlalchemy import false
+from sqlalchemy import false, true
 from sqlmodel import SQLModel, Column, Field, LargeBinary
 
 
@@ -76,6 +76,16 @@ class Device(SQLModel, table=True):
 class DeviceType(SQLModel, table=True):
     name: str = Field(primary_key=True)
     description: str
+    night_session: bool = Field(
+        default=True,
+        sa_column_kwargs={'server_default': true()},
+        description=(
+            "A night-session device is one that is designed to record data "
+            "during the night, such as a moth trap. The inferencing session"
+            "will run from midday to midday and the results will be ascribed "
+            "to the starting day."
+        )
+    )
     deleted: bool = Field(
         default=False,
         sa_column_kwargs={'server_default': false()}
@@ -115,7 +125,13 @@ class Inference(SQLModel, table=True):
     id: int | None = Field(primary_key=True, default=None)
     device_id: str = Field(foreign_key='device.id', index=True)
     deployment_id: int = Field(foreign_key='deployment.id', index=True)
-    date: date
+    session_date: date = Field(
+        index=True,
+        description=(
+            "The date of the inference session. For device types that run "
+            "overnight, this is the start date."
+        )
+    )
     task_arn: str | None
     completed: bool = Field(
         default=False,
