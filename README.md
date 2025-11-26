@@ -14,6 +14,11 @@ API Gateway API. These resources are defined in the `template.yaml` file in this
 project. You can update the template to add AWS resources through the same
 deployment process that updates your application code.
 
+NOTE: Work is in progress to set up the infrastructure using the Cloud
+Development Kit (CDK). This readme needs updating when that is complete. Refer
+to https://github.com/NERC-CEH/lepisense-cdk
+
+
 
 ## Development
 
@@ -147,11 +152,11 @@ To build and deploy your application, run the following in your shell:
 
 ```bash
 sam build --use-container
-sam deploy --profile <your-profile-name> --config-env <dev|staging|prod>
+sam deploy --profile <your-profile-name> --config-env <dev|test|prod>
 ```
 
 The first command will build the source of your application. The second command
-will package and deploy your application to AWS. Replace `<dev|staging|prod>`
+will package and deploy your application to AWS. Replace `<dev|test|prod>`
 with one of the three values according to the stage of deployment.
 
 You can find your API Gateway Endpoint URL in the output values displayed after

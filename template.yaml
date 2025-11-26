@@ -19,6 +19,23 @@ Resources:
       BinaryMediaTypes:
         - '*/*'
 
+  LambdaSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Security group for Lambda to allow access to RDS.
+      VpcId: 
+        Fn::ImportValue:
+          Fn::Sub: ${EnvironmentType}LepisenseVpcId
+      SecurityGroupEgress:
+        - Description: Allow outbound traffic to RDS PostgreSQL on port 5432
+          IpProtocol: tcp
+          FromPort: 5432
+          ToPort: 5432
+          # Traffic is allowed to the RDS's Security Group, not a CIDR
+          DestinationSecurityGroupId: 
+            Fn::ImportValue: 
+              Fn::Sub: ${EnvironmentType}LepisenseDatabaseSecurityGroupId
+
   LepiSenseInputLambda:
     Type: AWS::Serverless::Function # More info about Function Resource: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#awsserverlessfunction
     Properties:
@@ -28,16 +45,21 @@ Resources:
       Environment:
         Variables:
           ENVIRONMENT: !Ref EnvironmentType
+          POSTGRES_HOST:
+            Fn::ImportValue: !Sub ${EnvironmentType}LepisenseDatabaseHostName
+          POSTGRES_PORT: 5432
+          POSTGRES_USER: postgres
+          POSTGRES_DB: lepisense
+
       Runtime: python3.13
       Architectures:
         - x86_64
       VpcConfig:
         SubnetIds:
-          - subnet-0a1091fd903f56cf0
-          - subnet-02e117d39e4f1dcbc
-          - subnet-0dbc7dc19923592ff
+          - Fn::ImportValue: !Sub ${EnvironmentType}LepisensePrivateSubnetId1
+          - Fn::ImportValue: !Sub ${EnvironmentType}LepisensePrivateSubnetId2
         SecurityGroupIds:
-          - sg-0cd6ca43983d5b545
+          - !Ref LambdaSecurityGroup
       Policies: 
         - AWSLambdaVPCAccessExecutionRole
       Events:
@@ -57,23 +79,14 @@ Resources:
       S3Connector:
         Properties:
           Destination:
-            Id: LepiSenseBucket
+            Type: AWS::S3::Bucket
+            Arn: 
+              Fn::ImportValue:
+                Fn::Sub: ${EnvironmentType}LepisenseImageBucketArn
           Permissions:
             - Read
             - Write
 
-  LepiSenseSecurityGroup:
-    Type: AWS::EC2::SecurityGroup
-    Properties:
-      GroupDescription: Security group for Lambda function.
-      VpcId: vpc-05f0cabdcea9b6c3b
-
-  LepiSenseBucket:
-    Type: AWS::S3::Bucket
-    DeletionPolicy: Retain
-    UpdateReplacePolicy: Retain
-    Properties:
-      BucketName: !Sub lepisense-images-${EnvironmentType}
 
 Outputs:
   # ServerlessRestApi is an implicit API created out of Events key under Serverless::Function
@@ -88,6 +101,8 @@ Outputs:
   LepiSenseInputIamRole:
     Description: Implicit IAM Role created for LepiSense function
     Value: !GetAtt LepiSenseInputLambdaRole.Arn
-  LepiSenseBucket:
-    Description: S3 bucket name
-    Value: !Ref LepiSenseBucket
+  LepiSenseLambdaSecurityGroup:
+    Description: Security group for Lambda to allow access to RDS.
+    Value: !GetAtt LambdaSecurityGroup.GroupId
+    Export: 
+      Name: !Sub ${EnvironmentType}LepisenseLambdaSecurityGroupId
