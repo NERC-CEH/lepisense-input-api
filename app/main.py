@@ -60,9 +60,6 @@ app.add_middleware(
 # Store the engine in the app.state so it is available in requests.
 app.state.engine = engine
 
-# Mount the static directory to serve static files
-app.mount("/static", StaticFiles(directory="static"), name="static")
-
 # Attach all the routes we serve.
 app.include_router(router)
 
