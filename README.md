@@ -14,11 +14,13 @@ API Gateway API. These resources are defined in the `template.yaml` file in this
 project. You can update the template to add AWS resources through the same
 deployment process that updates your application code.
 
+!!!!!!!!!!!!!!!!!!!!!!
+
 NOTE: Work is in progress to set up the infrastructure using the Cloud
 Development Kit (CDK). This readme needs updating when that is complete. Refer
 to https://github.com/NERC-CEH/lepisense-cdk
 
-
+!!!!!!!!!!!!!!!!!!!!!!
 
 ## Development
 
@@ -41,12 +43,11 @@ Build your application with the `sam build --use-container` command.
 The SAM CLI installs dependencies defined in `app/requirements.txt`, creates a
 deployment package, and saves it in the `.aws-sam/build` folder.
 
-Use the `sam local start-api` to run the API locally on port 3000.
-
-```bash
-sam local start-api
-curl http://localhost:3000/
-```
+You might use `sam local start-api` to run the API locally on port 3000 but
+you'd have to figure something out to put a local database in place. You would
+also need to make the connection information available for the local database.
+That would mean modifying secrets.py to load from file or environment when
+there is no AWS secret to provide that information.
   
 ## Database Setup
 
@@ -54,22 +55,22 @@ The Relational Database Service (RDS) has been chosen to provide a managed
 PostgreSQL instance for data storage. Using a managed service reduces our
 maintenance burden. Postgres offers flexibility and familiarity.
 
-For initial development, a PostgreSQL database has been created using the
-[RDS Console](console.aws.amazon.com/rds/home).
+The database is created on AWS by deploying the Stateless Stack in the CDK
+project. After deploying the project in this repo to AWS you have to then deploy
+the Database Ingress Stack from the CDK project. Now you can access the API.
+
+!!!!!!!!!!!!!!
+The first thing you must do is call the /database/reset endpoint to create the
+database and establish the initial user.
+
+Need to change auth to accommodate authenticating userone without database.
+!!!!!!!!!!!!!!
 
 For the Lambda function to use the standard Python psycopg module for accessing
 the database it has to be installed with the appropriate client libraries as 
 they are not included in the operating system. For development,this has been
 achieved by adding options in the requirements.txt
 
-For the Lambda function to be able to connect to the database it has to attach
-to the same Virtual Private Cloud (VPC) that hosts the database. As well as
-specifying the VPC, subnets, and security group to use, permission has to be
-given to allow Lambda to make the connection. This has been arranged in the SAM
-template.yaml but it hard-codes VPC, subnet and security group values which
-would be different in another installation. See
-https://docs.aws.amazon.com/lambda/latest/dg/configuration-vpc.html
-Broader use of CloudFormation or Terraform would help solve this. 
 
 ### Database Migrations
 
@@ -77,10 +78,11 @@ Alembic is installed for database migrations. The implementation is a bit odd
 as there is no access to the database except via the lambda function and the 
 API it provides.
 
-First make any changes that are needed to app.sqlmodels and deploy the update.
-Use the `/database/revision` endpoint to then cause alembic to autogenerate a
-revision file. Paste this in to the alembic/versions folder with a file name 
-in the format `<date as yyyymmdd>-<time as hhmm>-<revision id>-<description>.py`
+First make any changes that are needed to app.sqlmodels and deploy the updated
+lambda function to AWS. Use the `/database/revision` endpoint to then cause
+alembic to autogenerate a revision file. Paste this in to the alembic/versions
+folder with a file name in the format `<date as yyyymmdd>-<time as
+hhmm>-<revision id>-<description>.py`
 
 Rebuild and redeploy the function then use the `/database/upgrade` endpoint to 
 cause the database to be updated.
@@ -90,6 +92,10 @@ version of the database created by FastAPI/SqlModel, use the `database/stamp`
 endpoint.
 
 ## Environment Variables
+
+!!!!!!!!!!!!!!!
+This is all change. Configured in template/samconfig.toml/Secrets Manager...
+!!!!!!!!!!!!!!!
 
 In the [Lambda Console](console.aws.amazon.com/lambda/home), add the following
 environment variables.

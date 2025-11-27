@@ -1,10 +1,14 @@
 AWSTemplateFormatVersion: '2010-09-09'
 Transform: AWS::Serverless-2016-10-31
 Description: |
-  LepiSense Input API
+  Lepisense Input API
 Parameters:
   EnvironmentType:
     Type: String
+    Default: prod
+  LogLevel:
+    Type: String
+    Default: warning
 
 # More info about Globals: https://github.com/awslabs/serverless-application-model/blob/master/docs/globals.rst
 Globals:
@@ -12,7 +16,7 @@ Globals:
     Timeout: 3
 
 Resources:
-  LepiSenseInputApi:
+  LepisenseInputApi:
     Type: AWS::Serverless::Api
     Properties:
       StageName: !Ref EnvironmentType
@@ -27,7 +31,7 @@ Resources:
         Fn::ImportValue:
           Fn::Sub: ${EnvironmentType}LepisenseVpcId
       SecurityGroupEgress:
-        - Description: Allow outbound traffic to RDS PostgreSQL on port 5432
+        - Description: Allow outbound traffic to RDS PostgreSQL on port 5432.
           IpProtocol: tcp
           FromPort: 5432
           ToPort: 5432
@@ -35,9 +39,41 @@ Resources:
           DestinationSecurityGroupId: 
             Fn::ImportValue: 
               Fn::Sub: ${EnvironmentType}LepisenseDatabaseSecurityGroupId
+        - Description: Allow all outbound traffic for AWS Secrets Manager. 
+          IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          # It would be more secure to use a VPC endpoint.
+          CidrIp: 0.0.0.0/0
 
-  LepiSenseInputLambda:
-    Type: AWS::Serverless::Function # More info about Function Resource: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#awsserverlessfunction
+  UserOneSecret:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Description: Secret for API root user.
+      GenerateSecretString:
+        ExcludeCharacters: O01Il\"\'`
+        GenerateStringKey: password
+        SecretStringTemplate: '{"username":"userone"}'
+      Name: !Sub ${EnvironmentType}LepisenseApiRootUserSecret
+  
+  JwtSecret:
+    # Consider using the Cloud Formation CommandRunner to create the key.
+    # https://aws.amazon.com/blogs/mt/running-bash-commands-in-aws-cloudformation-templates/
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Description: Secret for JWT parameters.
+      SecretString: >
+        {
+          "key": "",
+          "algorithm": "HS256",
+          "expires)minutes": "15"
+        }
+      
+
+      Name: !Sub ${EnvironmentType}LepisenseApiJwtSecret
+  
+  LepisenseInputLambda:
+    Type: AWS::Serverless::Function
     Properties:
       CodeUri: ./
       Handler: app.main.handler
@@ -45,11 +81,11 @@ Resources:
       Environment:
         Variables:
           ENVIRONMENT: !Ref EnvironmentType
-          POSTGRES_HOST:
-            Fn::ImportValue: !Sub ${EnvironmentType}LepisenseDatabaseHostName
-          POSTGRES_PORT: 5432
-          POSTGRES_USER: postgres
-          POSTGRES_DB: lepisense
+          LOG_LEVEL: !Ref LogLevel
+          POSTGRES_SECRET_NAME:
+            Fn::ImportValue: !Sub ${EnvironmentType}LepisenseDatabaseSecretName
+          USERONE_SECRET_ARN: !Ref UserOneSecret
+          JWT_SECRET_ARN: !Ref JwtSecret
 
       Runtime: python3.13
       Architectures:
@@ -61,20 +97,23 @@ Resources:
         SecurityGroupIds:
           - !Ref LambdaSecurityGroup
       Policies: 
-        - AWSLambdaVPCAccessExecutionRole
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole
+        - arn:aws:iam::aws:policy/AWSSecretsManagerClientReadOnlyAccess
       Events:
         Root:
           Type: Api # More info about API Event Source: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#api
           Properties:
             Path: /
             Method: get
-            RestApiId: !Ref LepiSenseInputApi
+            RestApiId: !Ref LepisenseInputApi
         NonRoot:
           Type: Api # More info about API Event Source: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#api
           Properties:
             Path: /{proxy+}
             Method: ANY
-            RestApiId: !Ref LepiSenseInputApi
+            RestApiId: !Ref LepisenseInputApi
+      LoggingConfig: 
+        LogGroup: !Sub /${EnvironmentType}LepisenseInputApiLamda
     Connectors:
       S3Connector:
         Properties:
@@ -92,16 +131,16 @@ Outputs:
   # ServerlessRestApi is an implicit API created out of Events key under Serverless::Function
   # Find out more about other implicit resources you can reference within SAM
   # https://github.com/awslabs/serverless-application-model/blob/master/docs/internals/generated_resources.rst#api
-  LepiSenseInputApi:
-    Description: API Gateway endpoint URL for Prod stage for LepiSense function
-    Value: !Sub https://${LepiSenseInputApi}.execute-api.${AWS::Region}.amazonaws.com/${EnvironmentType}/
-  LepiSenseInputLambda:
-    Description: LepiSense Lambda Function ARN
-    Value: !GetAtt LepiSenseInputLambda.Arn
-  LepiSenseInputIamRole:
-    Description: Implicit IAM Role created for LepiSense function
-    Value: !GetAtt LepiSenseInputLambdaRole.Arn
-  LepiSenseLambdaSecurityGroup:
+  LepisenseInputApi:
+    Description: API Gateway endpoint URL for Prod stage for Lepisense function
+    Value: !Sub https://${LepisenseInputApi}.execute-api.${AWS::Region}.amazonaws.com/${EnvironmentType}/
+  LepisenseInputLambda:
+    Description: Lepisense Lambda Function ARN
+    Value: !GetAtt LepisenseInputLambda.Arn
+  LepisenseInputIamRole:
+    Description: Implicit IAM Role created for Lepisense function
+    Value: !GetAtt LepisenseInputLambdaRole.Arn
+  LepisenseLambdaSecurityGroup:
     Description: Security group for Lambda to allow access to RDS.
     Value: !GetAtt LambdaSecurityGroup.GroupId
     Export: 

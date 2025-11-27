@@ -5,6 +5,7 @@ from sqlmodel import create_engine, SQLModel, Session
 from typing import Annotated
 
 from app.env import EnvSettings
+from app.secrets import get_secrets
 # Importing sqlmodels ensures the tables are created in the database.
 import app.sqlmodels  # noqa F401
 
@@ -13,10 +14,17 @@ logger = logging.getLogger()
 
 def create_db(env: EnvSettings):
 
-    pg_url = (f"postgresql://{env.postgres_user}:{env.postgres_password}@"
-              f"{env.postgres_host}:{env.postgres_port}/{env.postgres_db}")
+    # Load password from AWS Secrets Manager.
+    secrets = get_secrets(env)
 
-    engine = create_engine(pg_url, echo=True)
+    pg_url = (
+        f"postgresql://{secrets.postgres_user}:{secrets.postgres_password}@"
+        f"{secrets.postgres_host}:{secrets.postgres_port}/{secrets.postgres_db}"
+    )
+
+    # Log SQL queries if log_level is debug or info.
+    echo = True if env.log_level in ['debug', 'info'] else False
+    engine = create_engine(pg_url, echo=echo)
     return engine
 
 
