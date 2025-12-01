@@ -99,6 +99,7 @@ async def get_account(
 @router.post('', summary="Create account.", response_model=AccountGet)
 async def create_account(
     db: DbDependency,
+    env: EnvDependency,
     account: AdminDependency,
     body: AccountPost
 ):
@@ -111,10 +112,10 @@ async def create_account(
     * **role** should be set to one of [read|write|admin|root].
     * **disabled** should be set True to disable an account.
 
-    There is a built-in administrative account that can be configured in the 
+    There is a built-in administrative account that can be configured in the
     host environment.
     """
-    if account_exists(db, body.name):
+    if body.name == env.userone_name or account_exists(db, body.name):
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail=f"Account {body.name} already exists.")
@@ -195,12 +196,6 @@ async def update_account(
             detail=f"Organisation {body.organisation_name} does not exist.")
 
     current_account = get_account_by_name(db, name)
-    if name == env.initial_account_name:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail=f"Account {env.initial_account_name} cannot be modified."
-        )
-
     try:
         revised_account = body.model_dump(exclude_unset=True)
         extra_data = {}
@@ -239,10 +234,10 @@ async def delete_account(
             status_code=status.HTTP_409_CONFLICT,
             detail=f"Account {name} is in use and cannot be deleted.")
 
-    if name == env.initial_account_name:
+    if name == env.userone_name:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail=f"Account {env.initial_account_name} cannot be deleted."
+            detail=f"Account {env.userone_name} cannot be deleted."
         )
 
     try:

@@ -54,7 +54,7 @@ Resources:
         ExcludeCharacters: O01Il\"\'`
         GenerateStringKey: password
         SecretStringTemplate: '{"username":"userone"}'
-      Name: !Sub ${EnvironmentType}LepisenseApiRootUserSecret
+      Name: !Sub ${EnvironmentType}LepisenseApiUserOneSecret
   
   JwtSecret:
     # Consider using the Cloud Formation CommandRunner to create the key.

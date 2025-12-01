@@ -68,8 +68,13 @@ def create_access_token(
     return encoded_jwt
 
 
-def authenticate_account(db: Session, name: str, password: str):
+def authenticate_account(
+        env: EnvDependency, db: Session, name: str, password: str
+):
     """Confirms a name and password match."""
+    if name == env.userone_name and password == env.userone_pass:
+        return Account(name=name, role=Role.ROOT.value)
+
     account = db.exec(
         select(Account)
         .where(Account.name == name)
@@ -95,6 +100,10 @@ def get_current_account(
             raise authentication_exception
     except JWTError:
         raise authentication_exception
+
+    if name == env.userone_name:
+        # Userone account.
+        return Account(name=name, role=Role.ROOT.value)
 
     account = db.exec(
         select(Account)
@@ -171,7 +180,8 @@ async def login(
     """
     # Automatic validation ensures name and password exist.
     account = authenticate_account(
-        db, form_data.username, form_data.password)
+        env, db, form_data.username, form_data.password
+    )
     if not account:
         raise authentication_exception
 
