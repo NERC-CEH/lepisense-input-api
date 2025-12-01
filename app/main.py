@@ -2,26 +2,32 @@ import logging
 import sys
 
 from app.database import create_db
-from app.env import get_env_settings
+from app.env import get_all_settings
 from app.api.main import router
 
 from fastapi import FastAPI
-from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
 from mangum import Mangum
 
 
-# Load environment settings.
-env = get_env_settings()
+# Load settings.
+env = get_all_settings()
 
 # Configure logging
+levels = {
+    "critical": logging.CRITICAL,
+    "error": logging.ERROR,
+    "warning": logging.WARNING,
+    "info": logging.INFO,
+    "debug": logging.DEBUG
+}
 if logging.getLogger().hasHandlers():
     # Lambda pre-configures root logger.
-    logging.getLogger().setLevel(env.log_level)
+    logging.getLogger().setLevel(levels[env.log_level])
 else:
     # Local development.
-    logging.basicConfig(level=env.log_level)
+    logging.basicConfig(level=levels[env.log_level])
 logger = logging.getLogger()
 
 # Initialise database.

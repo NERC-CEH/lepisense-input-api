@@ -7,7 +7,7 @@ from sqlmodel import SQLModel
 from alembic import context
 
 from app import sqlmodels  # noqa
-from app.env import get_env_settings
+from app.env import get_all_settings
 
 # This is the Alembic Config object, which provides
 # access to the values within the .ini file in use.
@@ -36,7 +36,7 @@ def set_sqlalchemy_url():
     The settings can come from a .env file on a development system.
 
     """
-    env = get_env_settings()
+    env = get_all_settings()
     pg_url = (f"postgresql://{env.postgres_user}:{env.postgres_password}@"
               f"{env.postgres_host}:{env.postgres_port}/{env.postgres_db}")
     config.set_main_option("sqlalchemy.url", pg_url)

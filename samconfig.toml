@@ -9,7 +9,7 @@ region = "eu-west-2"
 confirm_changeset = true
 capabilities = "CAPABILITY_IAM"
 disable_rollback = true
-parameter_overrides = "EnvironmentType=\"dev\"" "LogLevel=\"debug\""
+parameter_overrides = "EnvironmentType=\"dev\" LogLevel=\"debug\""
 image_repositories = []
 
 [test.deploy.parameters]
@@ -21,7 +21,7 @@ region = "eu-west-2"
 confirm_changeset = true
 capabilities = "CAPABILITY_IAM"
 disable_rollback = true
-parameter_overrides = "EnvironmentType=\"test\"" "LogLevel=\"info\""
+parameter_overrides = "EnvironmentType=\"test\" LogLevel=\"info\""
 image_repositories = []
 
 [prod.deploy.parameters]
@@ -33,5 +33,5 @@ region = "eu-west-2"
 confirm_changeset = true
 capabilities = "CAPABILITY_IAM"
 disable_rollback = true
-parameter_overrides = "EnvironmentType=\"prod\"" "LogLevel=\"warning\""
+parameter_overrides = "EnvironmentType=\"prod\" LogLevel=\"warning\""
 image_repositories = []
