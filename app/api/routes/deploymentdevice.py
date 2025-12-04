@@ -203,10 +203,11 @@ def check_valid_deploymentdevice(
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Start date must be before end date.")
-    # Check device not already assigned in date range.
+    # Check device not already assigned in date range to another deployment.
     overlapping = db.exec(
         select(DeploymentDevice).
         where(DeploymentDevice.device_id == depdev.device_id).
+        where(DeploymentDevice.deployment_id != depdev.deployment_id).
         where(DeploymentDevice.deleted == False).
         where(DeploymentDevice.start_date < depdev.end_date).
         where(DeploymentDevice.end_date >= depdev.start_date)
