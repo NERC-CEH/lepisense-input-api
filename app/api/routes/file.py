@@ -277,7 +277,7 @@ def get_prefix(metadata: tuple, date: date):
     (organisation, network, deployment, device, devicetype) = metadata
     return (f"{organisation.name}/{network.country_code}/{network.name}/"
             f"{deployment.name}/{device.devicetype_name}/{date.year}/"
-            f"{date.month}/{date.day}")
+            f"{date.month:02d}/{date.day:02d}")
 
 
 async def upload_file(s3, bucket, prefix, file):
