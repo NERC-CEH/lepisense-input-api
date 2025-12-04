@@ -15,19 +15,12 @@ from mangum import Mangum
 env = get_all_settings()
 
 # Configure logging
-levels = {
-    "critical": logging.CRITICAL,
-    "error": logging.ERROR,
-    "warning": logging.WARNING,
-    "info": logging.INFO,
-    "debug": logging.DEBUG
-}
 if logging.getLogger().hasHandlers():
     # Lambda pre-configures root logger.
-    logging.getLogger().setLevel(levels[env.log_level])
+    logging.getLogger().setLevel(env.log_level.upper())
 else:
     # Local development.
-    logging.basicConfig(level=levels[env.log_level])
+    logging.basicConfig(level=env.log_level.upper())
 logger = logging.getLogger()
 
 # Initialise database.
