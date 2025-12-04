@@ -9,36 +9,29 @@ It is created as a serverless application to be hosted on Amazon Web Services
 (AWS) that you can deploy with the Serverless Application Model (SAM) Command
 Line Interface (CLI).
 
-The application uses several AWS resources, including Lambda functions and an
-API Gateway API. These resources are defined in the `template.yaml` file in this
+The application creates several AWS resources, including a Lambda function and
+an API Gateway. These resources are defined in the `template.yaml` file in this
 project. You can update the template to add AWS resources through the same
 deployment process that updates your application code.
 
-!!!!!!!!!!!!!!!!!!!!!!
+It depends upon other resources that are created using the Cloud
+Development Kit (CDK). Refer to https://github.com/NERC-CEH/lepisense-cdk and
+follow the set up procedure that it describes. It feels like a nasty mash up
+but it works.
 
-NOTE: Work is in progress to set up the infrastructure using the Cloud
-Development Kit (CDK). This readme needs updating when that is complete. Refer
-to https://github.com/NERC-CEH/lepisense-cdk
-
-!!!!!!!!!!!!!!!!!!!!!!
 
 ## Development
 
-VS Code with the [AWS
-Toolkit](https://docs.aws.amazon.com/toolkit-for-vscode/latest/userguide/welcome.html)
-extension has been used to develop the code. The AWS Toolkit uses the SAM CLI to
-build and deploy serverless applications on AWS. The AWS Toolkit also adds local
-debugging for Lambda function code. See the following links to get started.
+To use the SAM CLI, you need the following tools installed.
 
-To use the SAM CLI, you need the following tools.
+* [AWS CLI](https://docs.aws.amazon.com/cli/latest/userguide/getting-started-install.html)
+* [SAM CLI](https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/serverless-sam-cli-install.html)
+* [Python 3](https://www.python.org/downloads/)
+* [Docker](https://hub.docker.com/search/?type=edition&offering=community)
+* [Git](https://git-scm.com/install/)
 
-* SAM CLI - [Install the SAM CLI](https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/serverless-sam-cli-install.html)
-* [Python 3 installed](https://www.python.org/downloads/)
-* Docker - [Install Docker community edition](https://hub.docker.com/search/?type=edition&offering=community)
 
-I think the AWS CLI is installed with the toolkit
-
-Build your application with the `sam build --use-container` command.
+Build the application with the `sam build --use-container` command.
 
 The SAM CLI installs dependencies defined in `app/requirements.txt`, creates a
 deployment package, and saves it in the `.aws-sam/build` folder.
@@ -48,31 +41,49 @@ you'd have to figure something out to put a local database in place. You would
 also need to make the connection information available for the local database.
 That would mean modifying secrets.py to load from file or environment when
 there is no AWS secret to provide that information.
-  
-## Database Setup
-
-The Relational Database Service (RDS) has been chosen to provide a managed
-PostgreSQL instance for data storage. Using a managed service reduces our
-maintenance burden. Postgres offers flexibility and familiarity.
-
-The database is created on AWS by deploying the Stateless Stack in the CDK
-project. After deploying the project in this repo to AWS you have to then deploy
-the Database Ingress Stack from the CDK project. Now you can access the API.
-
-!!!!!!!!!!!!!!
-The first thing you must do is call the /database/reset endpoint to create the
-database and establish the initial user.
-
-Need to change auth to accommodate authenticating userone without database.
-!!!!!!!!!!!!!!
 
 For the Lambda function to use the standard Python psycopg module for accessing
 the database it has to be installed with the appropriate client libraries as 
 they are not included in the operating system. For development,this has been
 achieved by adding options in the requirements.txt
+  
+## Deployment
 
+1. The database and S3 buckets are created on AWS by deploying the Stateless
+Stack in the [CDK project](https://github.com/NERC-CEH/lepisense-cdk). 
+2. Deploy this project to AWS, creating the input-api lambda function, by
+   executing the following:
+   ```
+   aws sso login --profile <profile name>
+   sam build --use-container
+   sam deploy --profile <profile name> --config-env <stage>
+   ```
+   - You may be able to omit the profile option if you only have a single way to
+   log in to AWS.
+   - Replace `<stage>` by one of [dev|test|prod]
 
-### Database Migrations
+3. Deploy the Database Ingress Stack from the CDK project. This grants the
+lambda function access to the database. 
+4. In the [Secrets Manager console](console.aws.amazon.com/secretsmanager),
+locate the `<stage>LepisenseApiJwtSecret` and reveal the secret values. You need
+to generate a key by executing `openssl rand -hex 32` at the command line and
+inserting the result as the key value.
+5. Also in the Secrets Manager console, examine the secret
+`<stage>LepisenseApiUserOneSecret`. You will need the username and password in a
+moment.
+6. Either from the output of step 2 or from the [API Gateway
+console](https://console.aws.amazon.com/apigateway), copy the URL of the API.
+Paste the URL in to your browser to see a web interface to the API.
+7. Scroll down the page and locate the/database/reset endpoint. We need to 
+trigger this to cause the database tables to be created. To log in, click the
+padlock icon, enter the username and password noted in step 5, and click the 
+Authorize button. After a brief pause another dialog appears. Click its Close 
+button. To call the reset endpoint, click the Try It Out button and then the 
+Execute button.
+
+The API is now deployed.  
+
+## Database Migrations
 
 Alembic is installed for database migrations. The implementation is a bit odd
 as there is no access to the database except via the lambda function and the 
@@ -91,216 +102,77 @@ On first run, with a new database, to ensure Alembic is in step with the
 version of the database created by FastAPI/SqlModel, use the `database/stamp`
 endpoint.
 
-## Environment Variables
+## Use
 
-!!!!!!!!!!!!!!!
-This is all change. Configured in template/samconfig.toml/Secrets Manager...
-!!!!!!!!!!!!!!!
+A front end needs to be built for managing deployments. It should provide a
+user-friendly way to enter operational data. In the interim, the web interface
+can be used. The database/API is designed to be used as follows.
 
-In the [Lambda Console](console.aws.amazon.com/lambda/home), add the following
-environment variables.
+### Organisation
+It is expected that use of LepiSense will be granted to organisations, such as 
+UKCEH. There is a top level table where they are added. An abbreviated name for
+the organisation is used as a key to the table.
 
-For connection to the database, supply values obtatined from the RDS console.
-- POSTGRES_HOST: lepisense.c14qc2uwid2u.eu-west-2.rds.amazonaws.com
-- POSTGRES_PORT: 5432
-- POSTGRES_USER: postgres
-- POSTGRES_PASSWORD: a password
-- POSTGRES_DB: lepisense
+### Country
+It is expected that LepiSense will operate throughout the world so there is also
+a top level Country table. The country will affect the models used and the times
+at which things happen. A three-letter country code is used as a key to this
+table.
 
-In addition, add values for an initial user having root access to the API. 
-- INITIAL_USER_NAME: a username, e.g. userone
-- INITIAL_USER_PASS: a mighty password
-- INITIAL_USER_EMAIL: an email address
+### Network
+A Network is a way to group Deployments belonging to an Organisation in a
+Country. It is open to the user how many Networks they choose to create.
 
-Add the following environment variables to support authentication:
-- JWT_KEY = a key obtained with `openssl rand -hex 32`
-- JWT_ALGORITHM = 'HS256'
-- JWT_EXPIRES_MINUTES = '15'
+### Deployment
+A Deployment is a record of a Device Type at a location, for example a moth
+trap in your back garden.
 
-Add a switch to select the environment from [dev|test|prod]. Defaults to prod.
-- ENVIRONMENT = 'dev'
+### Device Type
+While LepiSense has begun with moth traps, there is no reason not to use the 
+system to deal with other instruments. The Device Type would determine how
+data from that device would be handled.
 
-Add a switch to selct the log level from [debug|info|warning|error|critical].
-Defaults to warning.
-- LOG_LEVEL = 'info'
+### Device
+Every single Device has a unique record and its use and history can be tracked.
 
-## Storage Setup
+### Deployment Device
+To fulfil a Deployment of a Device Type, a specific Device will be used and this
+is recorded in the Deployment Device table. If the Device needs servicing and
+is replaced by a different Device then a new record is added to the Deployment
+Device table. The dates when a Device in on a deployment are stored here.
 
-The Simple Storage Service (S3) is used for storing images sent to this API.
+### File
+A Device will upload a File, hopefully in a regular, automated fashion. The file
+is accompanied by the date and Device Id. From the Id, we know
+where it is deployed. I have asked that the file be named according to the time
+of capture in hhmmss format. Perhaps we will want to modify that and put the 
+time as a parameter or the device id and date in the file name. 
 
-A storage bucket has been created with the 
-[S3 Console](console.aws.amazon.com/s3/home)
+### Inference
+When a File is uploaded, it will create an Inference record if one does not
+already exist. At this stage, it indicates the arrival of data which will be
+processed by the inference system in due course. For moth traps there will be
+one record per device per day and all files associated with that record will be
+processed in a batch.
 
-The bucket is named `lepisense-images-<environment>` where environment is
-replaced by the value of the environment variable of that name.
+Because moth traps run overnight, their records span two dates. Therefore, a 
+session date is used, which is the earlier date, but it includes files spanning
+the two dates, from midday to midday. 
 
-## Deployment
+In the Device Type table, there is a night-session field which is set true for
+moth traps and other such night-operating devices. Set it false for a device
+that is day-operating.
 
-To be able to deploy to AWS you need to be suitably authenticated. You can do
-this using the [AWS Command Line
-Inerface](https://docs.aws.amazon.com/cli/latest/userguide/cli-chap-welcome.html)
+It is expected that additional information will be added to this table about
+when inferencing has been performed and with what models so that there is 
+traceability regarding how outputs have been generated.
 
-First [sign in](https://docs.aws.amazon.com/signin/latest/userguide/command-line-sign-in.html).
-to your AWS account. If it is the first time you will want to
+### Account
+An account is for a user of the API. It is less likely to represent an
+individual than an app which has its own user management system. Accounts are
+tied to Organisations and restrict the account holder to only access the records 
+of that Organisation. There are read, write and admin roles which limit which
+end points the account can access. There is also a root role allowing access
+to all Organisations.
 
-```
-aws configure sso
-```
-
-otherwise it is as follows, where you substitute `<your-profile-name>` with the
-value you chose during the previous configuration.
-
-```bash
-aws sso login --profile <your-profile-name>
-```
-
-To build and deploy your application, run the following in your shell:
-
-```bash
-sam build --use-container
-sam deploy --profile <your-profile-name> --config-env <dev|test|prod>
-```
-
-The first command will build the source of your application. The second command
-will package and deploy your application to AWS. Replace `<dev|test|prod>`
-with one of the three values according to the stage of deployment.
-
-You can find your API Gateway Endpoint URL in the output values displayed after
-deployment.
-
-
-
-<!-- 
-
-ORIGINAL DOCS FOLLOW - NOW OBSOLETE
-
-## Using the Upload Page
-
-### Accessing the Upload Page
-Once the application is running, open your web browser and navigate to http://localhost:8080/. You will see a form that allows you to upload files.
-![upload_form_screenshot.png](./images/upload_form_screenshot.png)
-
-### Uploading Files
-1. **Fill in the form::** 
-   - **Your Full Name:** Enter your full name.
-   - **Country:** Select the country from the dropdown menu.
-   - **Deployment:** Select the deployment from the dropdown menu.
-   - **Data type:** Select the type of data (e.g., motion images, snapshot images, audible recordings, ultrasound recordings).
-   - **Select Zip File:** Choose the zip file you want to upload, that contains images or audio files depending on the type of data that you are uploading.
-   - **Review Data:** Check the box to acknowledge that you have reviewed the data.
-  
-  
-2. **Upload the files::**
-   - Click the ```Upload``` button to start the upload process.
-   - A spinner will appear, and an alert will notify you not to close or refresh the page while uploading.
-   - Once the upload is complete, a success message will be displayed. 
-  
-  
-## Endpoints
-
-### Documentation
-- **Swagger UI:** [http://localhost:8080/docs](http://localhost:8080/docs)
-- **ReDoc:** [http://localhost:8080/redoc](http://localhost:8080/redoc)
-
-![api_screenshot.png](./images/api_screenshot.png)
-
-### Data management
-- **Upload Data:** Endpoint for pushing images and audio files to the server. The files need to be compressed in zip folder not bigger than 5Gbs. 
-  ```http
-  POST /upload/
-  ```
-  Form Data:
-  - `name`: `string`
-  - `country`: `string`
-  - `deployment`: `string`
-  - `data_type`: `string`
-  - `file`: `.zip file`
-  
-
-### Deployments
-- **Get Deployments:** Endpoint to retrieve all deployment information.
-  ```http
-  GET /get-deployments/
-  ```
-
-- **Create Deployment:** Endpoint to create a new deployment. 
-  ```http
-  POST /create-deployment/
-  ```
-  Body (JSON):
-  ```json
-  {
-    "country": "Country Name",
-    "country_code": "Country Code",
-    "location_name": "Location Name",
-    "lat": "Latitude",
-    "lon": "Longitude",
-    "camera_id": "Camera ID",
-    "hardware_id": "Hardware ID",
-    "status": "inactive"
-  }
-  ```
-  
-  
-- **Update Deployment:** Endpoint to update a deployment information. 
-  ```http
-  PUT /update-deployment/
-  ```
-  Body (JSON):
-  ```json
-  {
-    "country": "Country Name",
-    "country_code": "Country Code",
-    "location_name": "Location Name",
-    "lat": "Latitude",
-    "lon": "Longitude",
-    "location_id": "Location ID",
-    "camera_id": "Camera ID",
-    "system_id": "System ID",
-    "hardware_id": "Hardware ID",
-    "deployment_id": "Deployment ID",
-    "status": "inactive"
-  }
-  ```
-  
-  
-### Other Operations
-- **List Data:** Endpoint for retrieving the list of files available for a particular deployment. 
-  ```http
-  GET /list-data/
-  ```
-  Query Parameters:
-  - `country_location_name`: `string` (format: "Country - Location Name")
-  - `data_type`: `string` (one of "motion_images", "snapshot_images", "audible_recordings", "ultrasound_recordings")
-  
-  
-- **Get Logs:** Endpoint for downloading the logs from a bucket in the S3 server. 
-Everytime a user push some new data to the server, the log file is update with some information: 
-date and time, username, country, deployment, data type and filename. 
-  ```http
-  GET /get-logs/
-  ```
-  Query Parameters:
-  - `country_location_name`: `string` (format: "Country - Location Name")
-  - `data_type`: `string` (one of "motion_images", "snapshot_images", "audible_recordings", "ultrasound_recordings")
-  
-  
-- **Create Bucket:** Endpoint to create a new bucket in the S3 server. In our case, bucket are countries. 
-  ```http
-  POST /create-bucket/
-  ```
-  Body (JSON):
-  ```json
-  {
-    "bucket_name": "your_bucket_name"
-  }
-  ```
-  
-
-## License
-This project is licensed under the Apache 2.0 License.
-
-
-## Contact
-For more information, visit [UKCEH AMI System](https://www.ceh.ac.uk/solutions/equipment/automated-monitoring-insects-trap) or contact the team at [ami-system@ceh.ac.uk](mailto:ami-system@ceh.ac.uk).
--->
+At present, authentication and authorisation has not been fully implemented.
