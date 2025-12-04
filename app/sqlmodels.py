@@ -132,7 +132,13 @@ class Inference(SQLModel, table=True):
             "overnight, this is the start date."
         )
     )
-    task_arn: str | None
+    task_arn: str | None = Field(
+        default=None,
+        description=(
+            "The ARN of the inference task currently processing this job. "
+            "Reset to None on completion."
+        )
+    )
     completed: bool = Field(
         default=False,
         sa_column_kwargs={'server_default': false()}
