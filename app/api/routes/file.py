@@ -232,11 +232,11 @@ async def upload_files(
         # files from night session devices created before midday are
         # assigned to the previous day.
         session_date = date - timedelta(days=1)
+    else:
+        session_date = date
 
     create_inference(db, device_id, deployment_id, session_date)
 
-    logger.info(
-        f"Device {id} uploaded {len(files)} to {prefix}.")
     return {"message": "All files uploaded successfully"}
 
 
@@ -284,6 +284,7 @@ async def upload_file(s3, bucket, prefix, file):
     # It is important to save the media type of the file in S3. If not,
     # when getting the object in future, the media type will be
     # application/octet-stream and, I suspect, base64 encoded.
+    logger.info(f"Uploading {file.filename} to {bucket}/{prefix}")
     media_type = mimetypes.guess_type(file.filename)[0]
     if not media_type:
         media_type = "application/octet-stream"
@@ -299,6 +300,7 @@ async def upload_file(s3, bucket, prefix, file):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"Error uploading {prefix}/{file.filename}: {e.args[0]}")
+    logger.info(f"Uploaded {file.filename}")
 
 
 def create_inference(
